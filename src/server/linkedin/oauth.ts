@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { z } from 'zod';
 import { env } from '@/shared/config/env';
-import { AppError } from '@/shared/lib/api-response';
+import { AppError } from '@/server/http/response';
 
 /**
  * LinkedIn OAuth 2.0 (Authorization Code Grant) + OpenID Connect

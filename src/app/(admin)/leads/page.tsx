@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Card, CardTitle, Badge, EmptyState } from '@/shared/ui/primitives';
+import { Card, CardTitle, Badge, EmptyState } from '@/shared/ui';
 import { formatDateTime, formatNumber } from '@/shared/lib/format';
 import { listRecentLeads, countLeadsByStatus, countLeadsBySource } from '@/server/repositories/leadRepository';
 import { LEAD_SOURCE_LABEL, LEAD_STATUS_LABEL, type LeadStatus } from '@/entities/lead';

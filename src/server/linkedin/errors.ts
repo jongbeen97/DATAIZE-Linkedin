@@ -1,4 +1,5 @@
-import { AppError, type ApiErrorCode } from '@/shared/lib/api-response';
+import { AppError } from '@/server/http/response';
+import type { ApiErrorCode } from '@/shared/api/contract';
 
 /**
  * LinkedIn 의 HTTP 상태코드를 "우리 도메인의 에러"로 번역합니다.

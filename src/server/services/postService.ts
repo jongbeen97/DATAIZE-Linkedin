@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { AppError } from '@/shared/lib/api-response';
+import { AppError } from '@/server/http/response';
 import { canTransition, isEditable, isDeletable, type Post } from '@/entities/post';
 import * as postRepo from '@/server/repositories/postRepository';
 import { findUserById } from '@/server/repositories/userRepository';

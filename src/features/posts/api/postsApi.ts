@@ -1,7 +1,7 @@
 'use client';
 
 import { apiCall } from '@/shared/lib/http';
-import type { ApiResult } from '@/shared/lib/api-response';
+import type { ApiResult } from '@/shared/api/contract';
 import type { Post, PostWithMetrics, PostMetricsSnapshot } from '@/entities/post';
 import type { CreatePostInput, ListPostsQuery } from '../model/schema';
 

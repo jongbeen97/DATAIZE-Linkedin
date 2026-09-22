@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { ok, fail, withErrorHandling, AppError } from '@/shared/lib/api-response';
+import { ok, fail, withErrorHandling, AppError } from '@/server/http/response';
 import { requireSession } from '@/server/auth/session';
 import { findPostById } from '@/server/repositories/postRepository';
 import { findLatestMetrics } from '@/server/repositories/metricsRepository';

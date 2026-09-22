@@ -1,6 +1,6 @@
 import { Suspense } from 'react';
 import Link from 'next/link';
-import { Button, Skeleton } from '@/shared/ui/primitives';
+import { Button, Skeleton } from '@/shared/ui';
 import { PostListView } from '@/features/posts/components/PostListView';
 
 export const dynamic = 'force-dynamic';

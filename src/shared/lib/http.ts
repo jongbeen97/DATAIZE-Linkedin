@@ -1,6 +1,6 @@
 'use client';
 
-import type { ApiResult, ApiError } from './api-response';
+import type { ApiResult, ApiError } from '@/shared/api/contract';
 
 /**
  * 프론트엔드 공용 HTTP 클라이언트.

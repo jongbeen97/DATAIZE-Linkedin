@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { ok, withErrorHandling } from '@/shared/lib/api-response';
+import { ok, withErrorHandling } from '@/server/http/response';
 import { requireSession } from '@/server/auth/session';
 import { publishPost } from '@/server/services/postService';
 

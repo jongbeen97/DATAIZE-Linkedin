@@ -109,6 +109,26 @@ npm run seed:clean      # 예시 데이터만 삭제
 
 ## 3. 프로젝트 구조 — 도메인 분리와 의존 방향
 
+### 프론트엔드 / 백엔드 경계
+
+한 프로젝트 안에 있지만 **실행 위치가 다릅니다.** 폴더가 그 경계를 그대로 나타냅니다.
+
+| 구분 | 위치 | 실행 위치 | 비고 |
+|---|---|---|---|
+| **백엔드 — 엔드포인트** | `app/api/**` | 서버 | Route Handler (`@RestController`) |
+| **백엔드 — 로직** | `server/**` | 서버 | 클라이언트 번들에 **포함되지 않음** |
+| **프론트엔드** | `features/**/components`, `shared/ui/**` | 브라우저 | `'use client'` |
+| 화면 껍데기 | `app/(admin)/**/page.tsx` | 서버 | 서버 컴포넌트 |
+| 공유 | `entities/**`, `shared/lib/**`, `shared/api/**` | 양쪽 | 런타임 의존성 없는 타입·순수 함수 |
+
+`server/**` 가 브라우저에 가지 않기 때문에 MongoDB 연결 문자열과 LinkedIn Secret 을
+그 안에서 다뤄도 안전합니다. 이것이 폴더를 이렇게 나눈 가장 큰 이유입니다.
+
+> API 응답 계약(`ApiResult`, 에러 코드)은 양쪽이 모두 필요로 하지만
+> 응답을 **만드는** 코드는 서버 전용입니다. 그래서 둘을 나눴습니다.
+> `shared/api/contract.ts` 에는 런타임 의존성이 전혀 없고,
+> `NextResponse` 를 쓰는 코드는 `server/http/response.ts` 에 있습니다.
+
 ```
 src/
 ├── app/                              # 라우팅 + Controller 역할만. 얇게 유지
@@ -119,35 +139,85 @@ src/
 │   │   ├── posts/{page,new,[id]}
 │   │   ├── leads/page.tsx
 │   │   └── logs/page.tsx
-│   └── api/                          # ← Node.js 백엔드 (Route Handlers)
+│   └── api/                          # ← 백엔드 엔드포인트 (Route Handlers)
 │       ├── auth/linkedin/{route,callback}
-│       ├── posts/{route,[id],[id]/publish}
+│       ├── posts/{route,[id],[id]/publish,[id]/unpublish}
 │       ├── metrics/refresh
 │       ├── analytics/summary
 │       └── logs
 │
-├── entities/                         # 도메인 모델 — 무엇인가만 정의
-│   ├── post.ts                       #   상태 정의 + 상태 전이 규칙
+├── entities/                         # 도메인 모델 — 무엇인가만 정의 (양쪽 공유)
+│   ├── post.ts                       #   상태 정의 · 전이 규칙 · 상태 색 토큰
 │   ├── lead.ts
 │   └── user.ts
 │
-├── features/                         # ★ 도메인(기능) 단위 묶음
-│   ├── posts/{api, components, model}
-│   ├── analytics/components
-│   └── auth/components
+├── features/                         # ★ 프론트엔드 — 도메인(기능) 단위 묶음
+│   ├── posts/
+│   │   ├── api/                      #   우리 서버 호출 함수
+│   │   ├── model/                    #   zod 스키마
+│   │   └── components/
+│   │       ├── PostListView.tsx      #   조회 상태 · 동작 흐름만 (183줄)
+│   │       ├── PostEditor.tsx
+│   │       ├── StatusBadge.tsx
+│   │       └── list/                 #   ← 표현 단위로 분리
+│   │           ├── PostFilterBar.tsx
+│   │           ├── PostTable.tsx
+│   │           ├── PostActionModal.tsx
+│   │           ├── Pagination.tsx
+│   │           └── types.ts
+│   ├── analytics/
+│   │   ├── model/dashboard.ts        #   화면이 필요로 하는 데이터 타입
+│   │   └── components/
+│   │       ├── DashboardView.tsx     #   로딩 + 섹션 배치만 (133줄)
+│   │       └── sections/             #   ← 섹션 7개로 분리
+│   │           ├── ActionBanner.tsx
+│   │           ├── PostStatusCard.tsx
+│   │           ├── PerformanceCard.tsx
+│   │           ├── TrendCharts.tsx
+│   │           ├── ConversionTable.tsx
+│   │           ├── LeadSummaryCard.tsx
+│   │           └── RecentPostsCard.tsx
+│   └── auth/components/AdminShell.tsx
 │
 ├── shared/                           # 도메인을 모르는 공용 자산
-│   ├── ui/                           #   Button, Card, Badge, Modal, Toast, EmptyState…
-│   ├── lib/                          #   api-response, http, format, date
+│   ├── api/contract.ts               #   ApiResult · 에러 코드 (런타임 의존성 없음)
+│   ├── ui/
+│   │   ├── index.ts                  #   배럴 — 화면은 '@/shared/ui' 하나로 import
+│   │   ├── Button/Card/Badge/Modal/states
+│   │   ├── charts/                   #   BarChart · Sparkline · SegmentedBar
+│   │   └── toast.tsx
+│   ├── lib/                          #   date · format · http
 │   └── config/env.ts
 │
-└── server/                           # ★ 서버 전용 (클라이언트 번들에 포함되지 않음)
+└── server/                           # ★ 백엔드 전용 (클라이언트 번들에 포함되지 않음)
     ├── db/mongo.ts                   #   커넥션 + 인덱스 정의
+    ├── http/response.ts              #   ok/fail/AppError/withErrorHandling
     ├── repositories/                 #   DB 접근 + 문서↔도메인 매핑
     ├── services/                     #   비즈니스 로직
     ├── linkedin/                     #   외부 API 어댑터
     └── auth/, crypto.ts
 ```
+
+### 파일을 쪼갠 기준
+
+화면 컴포넌트는 **"데이터를 다루는 파일"과 "보여주는 파일"** 로 나눴습니다.
+
+```
+DashboardView.tsx   490줄  →  133줄 + 섹션 7개
+PostListView.tsx    445줄  →  183줄 + 표현 4개
+```
+
+`DashboardView` 를 열면 이제 **화면이 어떤 순서로 무엇을 보여주는지**가 한 화면에 들어옵니다.
+각 섹션이 어떻게 생겼는지는 해당 파일만 보면 되고, 섹션을 추가·삭제해도 다른 섹션에 영향이 없습니다.
+
+`shared/ui` 는 배럴(`index.ts`)을 두어 화면 코드가 개별 경로를 알지 않게 했습니다.
+
+```ts
+import { Button, Card, Modal, BarChart } from '@/shared/ui';
+```
+
+"`shared/ui` 가 무엇을 제공하는가"가 배럴 파일 하나로 드러나고,
+내부 파일을 쪼개거나 합쳐도 사용하는 쪽 import 를 고치지 않아도 됩니다.
 
 ### 의존 방향 (단방향, 역류 금지)
 
@@ -184,7 +254,8 @@ postRepository.ts  Property 'REMOVED' is missing in type ... Record<PostStatus, 
 | `server/repositories/` | `@Repository` |
 | `server/linkedin/` | 외부 API 클라이언트 |
 | `entities/` | Domain / Entity |
-| `shared/lib/api-response.ts` | `@RestControllerAdvice` + 공통 응답 DTO |
+| `server/http/response.ts` | `@RestControllerAdvice` + 공통 응답 DTO |
+| `shared/api/contract.ts` | 프론트·백이 공유하는 응답 계약 |
 
 ---
 

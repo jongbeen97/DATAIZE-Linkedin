@@ -1,4 +1,4 @@
-import { ok, withErrorHandling } from '@/shared/lib/api-response';
+import { ok, withErrorHandling } from '@/server/http/response';
 import { requireSession } from '@/server/auth/session';
 import { refreshAllMetrics } from '@/server/services/postService';
 

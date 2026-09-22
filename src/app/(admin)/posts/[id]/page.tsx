@@ -1,12 +1,11 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { Card, CardTitle, Badge, Button } from '@/shared/ui/primitives';
+import { Card, CardTitle, Badge, Button, Sparkline, Delta } from '@/shared/ui';
 import { formatDateTime, formatNumber, formatRelative } from '@/shared/lib/format';
 import { requireSession } from '@/server/auth/session';
 import { findPostById } from '@/server/repositories/postRepository';
 import { findLatestMetrics, findMetricsHistory } from '@/server/repositories/metricsRepository';
 import { countLeadsByPostIds } from '@/server/repositories/leadRepository';
-import { Sparkline, Delta } from '@/shared/ui/Sparkline';
 import { isEditable } from '@/entities/post';
 import { PostEditor } from '@/features/posts/components/PostEditor';
 import { StatusBadge } from '@/features/posts/components/StatusBadge';

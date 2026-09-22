@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { ok, fail, withErrorHandling } from '@/shared/lib/api-response';
+import { ok, fail, withErrorHandling } from '@/server/http/response';
 import { requireSession } from '@/server/auth/session';
 import { ensureIndexes } from '@/server/db/mongo';
 import { listPosts } from '@/server/repositories/postRepository';

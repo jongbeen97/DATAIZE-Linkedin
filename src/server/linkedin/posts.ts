@@ -1,4 +1,4 @@
-import { AppError } from '@/shared/lib/api-response';
+import { AppError } from '@/server/http/response';
 import type { PostVisibility } from '@/entities/post';
 import { linkedinFetch } from './client';
 

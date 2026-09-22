@@ -1,5 +1,5 @@
 import { env } from '@/shared/config/env';
-import { AppError } from '@/shared/lib/api-response';
+import { AppError } from '@/server/http/response';
 import { findAccessToken } from '@/server/repositories/userRepository';
 import { writeApiCallLog } from '@/server/repositories/apiLogRepository';
 import { mapLinkedInError, isRetryable } from './errors';

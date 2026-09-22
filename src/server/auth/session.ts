@@ -1,7 +1,7 @@
 import { cookies } from 'next/headers';
 import { SignJWT, jwtVerify } from 'jose';
 import { env } from '@/shared/config/env';
-import { AppError } from '@/shared/lib/api-response';
+import { AppError } from '@/server/http/response';
 import type { SessionUser } from '@/entities/user';
 
 /**

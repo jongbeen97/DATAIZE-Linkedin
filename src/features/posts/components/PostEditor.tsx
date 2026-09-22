@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Button, Card, CardTitle, Modal, Badge } from '@/shared/ui/primitives';
+import { Button, Card, CardTitle, Modal, Badge } from '@/shared/ui';
 import { useToast } from '@/shared/ui/toast';
 import { hintFor } from '@/shared/lib/http';
 import { cx } from '@/shared/lib/format';

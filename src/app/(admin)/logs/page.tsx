@@ -1,4 +1,4 @@
-import { Card, CardTitle, Badge, EmptyState } from '@/shared/ui/primitives';
+import { Card, CardTitle, Badge, EmptyState } from '@/shared/ui';
 import { formatDateTime } from '@/shared/lib/format';
 import { requireSession } from '@/server/auth/session';
 import { listApiCallLogs } from '@/server/repositories/apiLogRepository';
