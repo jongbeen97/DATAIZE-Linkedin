@@ -8,6 +8,7 @@
 @theme {
   --color-brand-50: #eef4ff;
   --color-brand-100: #dbe6ff;
+  --color-brand-400: #60a5fa;
   --color-brand-500: #2563eb;
   --color-brand-600: #1d4ed8;
   --color-brand-700: #1e40af;
@@ -21,20 +22,54 @@
 
 :root {
   --surface: #ffffff;
-  --canvas: #f6f7f9;
-  --line: #e5e7eb;
-  --ink: #111827;
-  --ink-muted: #6b7280;
+  --surface-sunken: #f8fafc;
+  --canvas: #f4f6f8;
+  --line: #e4e7ec;
+  --line-strong: #cbd2da;
+  --ink: #0f172a;
+  --ink-muted: #667085;
+  --ink-subtle: #98a2b3;
+
+  /* 카드 깊이 — 2단계만 둡니다. 더 늘리면 위계가 흐려집니다 */
+  --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.05), 0 1px 3px rgba(16, 24, 40, 0.04);
+  --shadow-md: 0 2px 4px rgba(16, 24, 40, 0.04), 0 8px 20px -6px rgba(16, 24, 40, 0.1);
+
+  /* ------------------------------------------------------------------
+     상태 색 — 뱃지·분포 막대·차트가 모두 이 변수를 참조합니다.
+     "발행 완료는 어느 화면에서나 초록" 이라는 규칙을 토큰으로 강제합니다.
+     ------------------------------------------------------------------ */
+  --status-draft: #94a3b8;
+  --status-scheduled: #8b5cf6;
+  --status-publishing: #f59e0b;
+  --status-published: #10b981;
+  --status-failed: #f43f5e;
+  --status-removed: #64748b;
+
   color-scheme: light;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
-    --surface: #161a20;
-    --canvas: #0e1116;
+    --surface: #171b22;
+    --surface-sunken: #12161c;
+    --canvas: #0b0e13;
     --line: #262c35;
+    --line-strong: #39414d;
     --ink: #e8eaed;
-    --ink-muted: #9aa4b2;
+    --ink-muted: #98a2b3;
+    --ink-subtle: #6b7684;
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow-md: 0 2px 4px rgba(0, 0, 0, 0.3), 0 8px 24px -6px rgba(0, 0, 0, 0.5);
+
+    /* 어두운 배경에서는 채도를 조금 올려야 같은 밝기로 읽힙니다 */
+    --status-draft: #94a3b8;
+    --status-scheduled: #a78bfa;
+    --status-publishing: #fbbf24;
+    --status-published: #34d399;
+    --status-failed: #fb7185;
+    --status-removed: #7c8797;
+
     color-scheme: dark;
   }
 }
@@ -43,6 +78,11 @@ html,
 body {
   background: var(--canvas);
   color: var(--ink);
+}
+
+/* 숫자는 항상 고정폭 — 값이 바뀌어도 자릿수가 흔들리지 않습니다 */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
 }
 
 body {

@@ -30,6 +30,22 @@ export const POST_STATUS_LABEL: Record<PostStatus, string> = {
 };
 
 /**
+ * 상태 색 토큰.
+ *
+ * 실제 색값은 globals.css 의 CSS 변수에만 있습니다. 여기서는 "어느 변수를 쓸지"만
+ * 정의해, 뱃지 · 분포 막대 · 차트가 모두 같은 출처를 바라보게 합니다.
+ * 라이트/다크 테마 전환도 CSS 변수 쪽에서만 처리됩니다.
+ */
+export const POST_STATUS_COLOR: Record<PostStatus, string> = {
+  DRAFT: 'var(--status-draft)',
+  SCHEDULED: 'var(--status-scheduled)',
+  PUBLISHING: 'var(--status-publishing)',
+  PUBLISHED: 'var(--status-published)',
+  FAILED: 'var(--status-failed)',
+  REMOVED: 'var(--status-removed)',
+};
+
+/**
  * 상태 전이 규칙(State Machine).
  *
  * status 를 단순 string 으로 두면 "PUBLISHED 인 글을 다시 DRAFT 로" 같은

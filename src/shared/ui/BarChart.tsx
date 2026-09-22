@@ -25,7 +25,7 @@ export function BarChart({
   if (data.every((d) => d.count === 0)) {
     return (
       <div
-        className="grid place-items-center rounded-lg border border-dashed border-[var(--line)] text-xs text-[var(--ink-muted)]"
+        className="grid place-items-center rounded-lg border border-dashed border-[var(--line-strong)] text-xs text-[var(--ink-muted)]"
         style={{ height }}
       >
         아직 데이터가 없습니다
@@ -50,7 +50,7 @@ export function BarChart({
                 className={
                   d.count > 0
                     ? 'rounded-t bg-[var(--color-brand-500)] transition-colors group-hover:bg-[var(--color-brand-700)]'
-                    : 'rounded-t bg-[var(--line)]'
+                    : 'rounded-t bg-[var(--line-strong)]'
                 }
                 style={{ height: barPx }}
               />

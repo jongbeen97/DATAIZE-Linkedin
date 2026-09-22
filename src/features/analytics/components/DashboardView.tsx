@@ -4,10 +4,11 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Button, Card, CardTitle, Badge, ErrorState, Skeleton, EmptyState } from '@/shared/ui/primitives';
 import { BarChart } from '@/shared/ui/BarChart';
+import { SegmentedBar } from '@/shared/ui/SegmentedBar';
 import { useToast } from '@/shared/ui/toast';
 import { apiCall, hintFor } from '@/shared/lib/http';
-import { formatNumber, formatRelative, formatDateTime, truncate, cx } from '@/shared/lib/format';
-import { POST_STATUS_LABEL, type PostStatus } from '@/entities/post';
+import { formatNumber, formatRelative, formatDateTime, truncate } from '@/shared/lib/format';
+import { POST_STATUS_LABEL, POST_STATUS_COLOR, POST_STATUSES, type PostStatus } from '@/entities/post';
 import { LEAD_SOURCE_LABEL, LEAD_STATUS_LABEL, type LeadSource, type LeadStatus } from '@/entities/lead';
 import { StatusBadge } from '@/features/posts/components/StatusBadge';
 import { refreshMetrics } from '@/features/posts/api/postsApi';
@@ -56,9 +57,13 @@ interface DashboardSummary {
  * 설계 원칙: 숫자를 나열하는 화면이 아니라,
  * "지금 무엇을 해야 하는가"를 가장 위에서 알려주는 화면으로 구성했습니다.
  *   ① 조치 필요 배너 (실패/예약 건수 → 클릭하면 필터된 목록으로 이동)
- *   ② 상태별 카드 (각 카드가 필터 링크)
- *   ③ 성과 지표 + 데이터 출처/최신성 표시
- *   ④ 추이 차트, 유입/리드 현황, 최근 게시물
+ *   ② 상태 분포 막대 + 누적 성과 (범례 클릭 = 필터 이동)
+ *   ③ 14일 추이 차트 2종
+ *   ④ 유입/리드 현황, 최근 게시물
+ *
+ * 수치 카드를 균등하게 늘어놓지 않은 이유:
+ * 모두 같은 크기면 무엇이 중요한지 화면이 말해주지 못합니다.
+ * 상태는 비율(막대), 성과는 핵심 2개만 크게 두어 시선 순서를 만들었습니다.
  */
 export function DashboardView() {
   const toast = useToast();
@@ -108,13 +113,15 @@ export function DashboardView() {
   if (loading) {
     return (
       <div className="space-y-4">
-        <Skeleton className="h-20 w-full" />
-        <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <Skeleton key={i} className="h-24" />
-          ))}
+        <Skeleton className="h-16 w-full" />
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
+          <Skeleton className="h-40" />
+          <Skeleton className="h-40" />
         </div>
-        <Skeleton className="h-64 w-full" />
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Skeleton className="h-56" />
+          <Skeleton className="h-56" />
+        </div>
       </div>
     );
   }
@@ -158,61 +165,91 @@ export function DashboardView() {
         </Card>
       )}
 
-      {/* ─────────── ② 상태별 현황 — 각 카드가 목록 필터로 연결된다 ─────────── */}
-      <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
-        <StatCard label="전체" value={data.totalPosts} href="/posts" />
-        {(Object.keys(data.statusCounts) as PostStatus[]).map((s) => (
-          <StatCard
-            key={s}
-            label={POST_STATUS_LABEL[s]}
-            value={data.statusCounts[s]}
-            href={`/posts?status=${s}`}
-            tone={s === 'FAILED' && data.statusCounts[s] > 0 ? 'danger' : 'default'}
+      {/* ─────────── ② 상태 분포 + 누적 성과 ───────────
+          카드 7개를 늘어놓는 대신 한 줄의 분포 막대로 묶었습니다.
+          같은 높이에 '전체 중 얼마'라는 비율 정보가 추가로 담깁니다. */}
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
+        <Card>
+          <CardTitle
+            right={
+              <Link href="/posts" className="text-xs text-[var(--color-brand-600)] hover:underline">
+                전체 보기 →
+              </Link>
+            }
+          >
+            게시물 현황
+          </CardTitle>
+
+          <div className="mb-4 flex items-baseline gap-2">
+            <span className="text-3xl font-semibold tracking-tight tabular-nums">
+              {formatNumber(data.totalPosts)}
+            </span>
+            <span className="text-xs text-[var(--ink-muted)]">건</span>
+          </div>
+
+          <SegmentedBar
+            emptyLabel="아직 작성한 게시물이 없습니다."
+            segments={POST_STATUSES.map((st) => ({
+              key: st,
+              label: POST_STATUS_LABEL[st],
+              value: data.statusCounts[st],
+              color: POST_STATUS_COLOR[st],
+              href: `/posts?status=${st}`,
+              alert: st === 'FAILED',
+            }))}
           />
-        ))}
+        </Card>
+
+        <Card>
+          <CardTitle
+            right={
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                {/* 데이터 출처를 숨기지 않고 명시한다 */}
+                {data.metricsSource === 'sample' ? (
+                  <Badge tone="amber">샘플 데이터</Badge>
+                ) : (
+                  <Badge tone="green">LinkedIn 실연동</Badge>
+                )}
+                <span className="text-[11px] text-[var(--ink-muted)]">
+                  {formatRelative(data.metricsCollectedAt)} 수집
+                </span>
+                <Button size="sm" loading={refreshing} onClick={() => void handleRefresh()}>
+                  새로고침
+                </Button>
+              </div>
+            }
+          >
+            발행 게시물 성과 (누적)
+          </CardTitle>
+
+          {/* 핵심 2개는 크게, 나머지는 작게 — 같은 크기로 6개를 늘어놓으면 위계가 사라집니다 */}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <HeroMetric label="총 노출" value={formatNumber(data.totals.impressions)} />
+            <HeroMetric
+              label="참여율"
+              value={`${data.totals.engagementRate.toFixed(2)}%`}
+              caption="(반응+댓글+공유) / 노출"
+            />
+          </div>
+
+          <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2 border-t border-[var(--line)] pt-3 sm:grid-cols-4">
+            <Metric label="반응" value={formatNumber(data.totals.reactions)} />
+            <Metric label="댓글" value={formatNumber(data.totals.comments)} />
+            <Metric label="공유" value={formatNumber(data.totals.shares)} />
+            <Metric label="링크 클릭" value={formatNumber(data.totals.clicks)} />
+          </div>
+
+          {data.metricsSource === 'sample' && (
+            <p className="mt-3 rounded-lg bg-[var(--surface-sunken)] px-3 py-2 text-[11px] leading-relaxed text-[var(--ink-muted)]">
+              위 수치는 실제 LinkedIn 값이 아닙니다. 상세 지표 조회는
+              <code className="mx-1 rounded bg-[var(--line)] px-1">r_member_postAnalytics</code>
+              권한 승인이 필요하며, 승인 후
+              <code className="mx-1 rounded bg-[var(--line)] px-1">METRICS_PROVIDER=linkedin</code>
+              으로 바꾸면 코드 수정 없이 실연동으로 전환됩니다.
+            </p>
+          )}
+        </Card>
       </div>
-
-      {/* ─────────── ③ 성과 지표 ─────────── */}
-      <Card>
-        <CardTitle
-          right={
-            <div className="flex items-center gap-2">
-              {/* 데이터 출처를 숨기지 않고 명시한다 */}
-              {data.metricsSource === 'sample' ? (
-                <Badge tone="amber">샘플 데이터 · LinkedIn 지표 권한 심사 대기</Badge>
-              ) : (
-                <Badge tone="green">LinkedIn 실시간 연동</Badge>
-              )}
-              <span className="text-[11px] text-[var(--ink-muted)]">
-                마지막 수집: {formatRelative(data.metricsCollectedAt)}
-              </span>
-              <Button size="sm" loading={refreshing} onClick={() => void handleRefresh()}>
-                지금 새로고침
-              </Button>
-            </div>
-          }
-        >
-          발행 게시물 성과 (누적)
-        </CardTitle>
-
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-          <Metric label="노출" value={formatNumber(data.totals.impressions)} />
-          <Metric label="반응" value={formatNumber(data.totals.reactions)} />
-          <Metric label="댓글" value={formatNumber(data.totals.comments)} />
-          <Metric label="공유" value={formatNumber(data.totals.shares)} />
-          <Metric label="링크 클릭" value={formatNumber(data.totals.clicks)} />
-          <Metric label="참여율" value={`${data.totals.engagementRate.toFixed(2)}%`} />
-        </div>
-
-        {data.metricsSource === 'sample' && (
-          <p className="mt-3 rounded-lg bg-[var(--canvas)] px-3 py-2 text-[11px] leading-relaxed text-[var(--ink-muted)]">
-            위 수치는 실제 LinkedIn 값이 아닙니다. 개인 계정 게시물의 상세 지표 조회는
-            <code className="mx-1 rounded bg-[var(--line)] px-1">r_member_postAnalytics</code>
-            권한 승인이 필요하며, 승인 후 <code className="mx-1 rounded bg-[var(--line)] px-1">METRICS_PROVIDER=linkedin</code>
-            으로 변경하면 코드 수정 없이 실연동으로 전환됩니다.
-          </p>
-        )}
-      </Card>
 
       {/* ─────────── ④ 추이 ─────────── */}
       <div className="grid gap-4 lg:grid-cols-2">
@@ -348,43 +385,31 @@ export function DashboardView() {
 
 /* ------------------------------ 보조 ------------------------------ */
 
-function StatCard({
+/** 가장 중요한 수치 — 크게, 그리고 계산식을 함께 보여줍니다 */
+function HeroMetric({
   label,
   value,
-  href,
-  tone = 'default',
+  caption,
 }: {
   label: string;
-  value: number;
-  href: string;
-  tone?: 'default' | 'danger';
+  value: string;
+  caption?: string;
 }) {
   return (
-    <Link
-      href={href}
-      className={cx(
-        'rounded-xl border bg-[var(--surface)] p-4 transition hover:border-[var(--color-brand-500)]',
-        tone === 'danger' ? 'border-rose-300' : 'border-[var(--line)]',
-      )}
-    >
+    <div className="rounded-xl bg-[var(--surface-sunken)] px-4 py-3">
       <p className="text-xs text-[var(--ink-muted)]">{label}</p>
-      <p
-        className={cx(
-          'mt-1 text-2xl font-semibold tabular-nums',
-          tone === 'danger' && 'text-rose-600',
-        )}
-      >
-        {formatNumber(value)}
-      </p>
-    </Link>
+      <p className="mt-1 text-2xl font-semibold tracking-tight tabular-nums">{value}</p>
+      {caption && <p className="mt-0.5 text-[10px] text-[var(--ink-subtle)]">{caption}</p>}
+    </div>
   );
 }
 
+/** 보조 수치 — 배경 없이 한 줄로 */
 function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg bg-[var(--canvas)] px-3 py-2.5">
+    <div className="flex items-baseline justify-between gap-2 sm:block">
       <p className="text-[11px] text-[var(--ink-muted)]">{label}</p>
-      <p className="mt-0.5 text-lg font-semibold tabular-nums">{value}</p>
+      <p className="text-sm font-semibold tabular-nums sm:mt-0.5">{value}</p>
     </div>
   );
 }

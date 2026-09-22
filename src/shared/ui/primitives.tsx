@@ -22,7 +22,8 @@ export function Card({
   return (
     <section
       className={cx(
-        'rounded-xl border bg-[var(--surface)] border-[var(--line)] shadow-[0_1px_2px_rgba(16,24,40,.04)]',
+        'rounded-xl border border-[var(--line)] bg-[var(--surface)]',
+        'shadow-[var(--shadow-sm)]',
         padded && 'p-5',
         className,
       )}
@@ -34,8 +35,8 @@ export function Card({
 
 export function CardTitle({ children, right }: { children: ReactNode; right?: ReactNode }) {
   return (
-    <header className="mb-4 flex items-center justify-between gap-3">
-      <h2 className="text-sm font-semibold tracking-tight">{children}</h2>
+    <header className="mb-4 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+      <h2 className="text-[13px] font-semibold tracking-tight text-[var(--ink)]">{children}</h2>
       {right}
     </header>
   );
@@ -222,7 +223,7 @@ export function Modal({
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="relative w-full max-w-lg rounded-xl border border-[var(--line)] bg-[var(--surface)] p-5 shadow-xl"
+        className="relative w-full max-w-lg rounded-xl border border-[var(--line)] bg-[var(--surface)] p-5 shadow-[var(--shadow-md)]"
         style={{ animation: 'dz-fade-up .16s ease-out' }}
       >
         <h3 className="mb-3 text-base font-semibold">{title}</h3>

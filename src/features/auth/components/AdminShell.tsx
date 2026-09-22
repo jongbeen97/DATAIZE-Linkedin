@@ -40,11 +40,19 @@ export function AdminShell({
   return (
     <div className="flex min-h-dvh">
       {/* ------------------------- 사이드바 ------------------------- */}
-      <aside className="hidden w-60 shrink-0 border-r border-[var(--line)] bg-[var(--surface)] p-4 lg:block">
-        <p className="px-2 text-xs font-semibold tracking-widest text-[var(--color-brand-600)]">
-          DATAIZE ADMIN
-        </p>
-        <nav className="mt-5 space-y-1">
+      <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 border-r border-[var(--line)] bg-[var(--surface)] p-4 lg:block">
+        <div className="flex items-center gap-2 px-2 py-1">
+          <span
+            aria-hidden
+            className="grid size-7 place-items-center rounded-lg bg-[var(--color-brand-600)] text-xs font-bold text-white"
+          >
+            D
+          </span>
+          <span className="text-xs font-semibold tracking-widest text-[var(--ink)]">
+            DATAIZE ADMIN
+          </span>
+        </div>
+        <nav className="mt-6 space-y-0.5">
           {NAV.map((item) => {
             const active = pathname.startsWith(item.href);
             return (
@@ -53,14 +61,28 @@ export function AdminShell({
                 href={item.href}
                 aria-current={active ? 'page' : undefined}
                 className={cx(
-                  'block rounded-lg px-3 py-2.5 transition',
+                  'relative block rounded-lg py-2.5 pr-3 pl-4 transition',
                   active
-                    ? 'bg-[var(--color-brand-50)] text-[var(--color-brand-700)] dark:bg-[var(--color-brand-700)]/15'
-                    : 'hover:bg-[var(--canvas)]',
+                    ? 'bg-[var(--color-brand-50)] text-[var(--color-brand-700)] dark:bg-[var(--color-brand-700)]/20 dark:text-[var(--color-brand-400)]'
+                    : 'text-[var(--ink)] hover:bg-[var(--surface-sunken)]',
                 )}
               >
+                {/* 선택된 메뉴를 색만이 아니라 형태로도 구분 — 색각 이상 사용자 고려 */}
+                {active && (
+                  <span
+                    aria-hidden
+                    className="absolute top-1/2 left-0 h-5 w-1 -translate-y-1/2 rounded-r-full bg-[var(--color-brand-600)] dark:bg-[var(--color-brand-400)]"
+                  />
+                )}
                 <span className="block text-sm font-medium">{item.label}</span>
-                <span className="mt-0.5 block text-[11px] text-[var(--ink-muted)]">{item.desc}</span>
+                <span
+                  className={cx(
+                    'mt-0.5 block text-[11px]',
+                    active ? 'opacity-70' : 'text-[var(--ink-muted)]',
+                  )}
+                >
+                  {item.desc}
+                </span>
               </Link>
             );
           })}
@@ -69,7 +91,7 @@ export function AdminShell({
 
       <div className="flex min-w-0 flex-1 flex-col">
         {/* ------------------------- 헤더 ------------------------- */}
-        <header className="flex items-center gap-3 border-b border-[var(--line)] bg-[var(--surface)] px-5 py-3">
+        <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-[var(--line)] bg-[var(--surface)]/85 px-5 py-3 backdrop-blur-md">
           <div className="min-w-0">
             <h1 className="truncate text-base font-semibold tracking-tight">
               {current?.label ?? '관리자'}
@@ -93,7 +115,7 @@ export function AdminShell({
             )}
             <button
               onClick={() => void logout()}
-              className="rounded-lg border border-[var(--line)] px-2.5 py-1.5 text-xs hover:bg-[var(--canvas)]"
+              className="rounded-lg border border-[var(--line)] px-2.5 py-1.5 text-xs transition hover:bg-[var(--surface-sunken)]"
             >
               로그아웃
             </button>
@@ -101,7 +123,7 @@ export function AdminShell({
         </header>
 
         {/* 모바일용 탭 네비 — 화면이 좁아도 이동이 막히지 않게 */}
-        <nav className="flex gap-1 overflow-x-auto border-b border-[var(--line)] bg-[var(--surface)] px-3 py-2 lg:hidden">
+        <nav className="sticky top-[57px] z-20 flex gap-1 overflow-x-auto border-b border-[var(--line)] bg-[var(--surface)]/85 px-3 py-2 backdrop-blur-md lg:hidden">
           {NAV.map((item) => (
             <Link
               key={item.href}
@@ -118,7 +140,7 @@ export function AdminShell({
           ))}
         </nav>
 
-        <main className="min-w-0 flex-1 p-4 sm:p-6">{children}</main>
+        <main className="mx-auto w-full min-w-0 max-w-[1400px] flex-1 p-4 sm:p-6">{children}</main>
       </div>
     </div>
   );
