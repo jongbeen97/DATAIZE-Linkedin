@@ -1,0 +1,90 @@
+@import 'tailwindcss';
+
+/* ------------------------------------------------------------------
+   디자인 토큰
+   색을 컴포넌트마다 하드코딩하지 않고 여기 한 곳에서 정의합니다.
+   → "같은 의미는 언제나 같은 색" 이라는 UX 일관성 규칙을 코드로 보장
+   ------------------------------------------------------------------ */
+@theme {
+  --color-brand-50: #eef4ff;
+  --color-brand-100: #dbe6ff;
+  --color-brand-500: #2563eb;
+  --color-brand-600: #1d4ed8;
+  --color-brand-700: #1e40af;
+
+  --color-surface: #ffffff;
+  --color-canvas: #f6f7f9;
+  --color-line: #e5e7eb;
+  --color-ink: #111827;
+  --color-ink-muted: #6b7280;
+}
+
+:root {
+  --surface: #ffffff;
+  --canvas: #f6f7f9;
+  --line: #e5e7eb;
+  --ink: #111827;
+  --ink-muted: #6b7280;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --surface: #161a20;
+    --canvas: #0e1116;
+    --line: #262c35;
+    --ink: #e8eaed;
+    --ink-muted: #9aa4b2;
+    color-scheme: dark;
+  }
+}
+
+html,
+body {
+  background: var(--canvas);
+  color: var(--ink);
+}
+
+body {
+  font-family:
+    'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Malgun Gothic', system-ui,
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 키보드 사용자를 위한 포커스 링 — 접근성 기본기 */
+:focus-visible {
+  outline: 2px solid var(--color-brand-500);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+@keyframes dz-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes dz-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
