@@ -132,6 +132,11 @@ export interface Post {
 /** 목록/대시보드에서 지표까지 함께 보여줄 때 쓰는 조회 모델 */
 export interface PostWithMetrics extends Post {
   metrics: PostMetricsSnapshot | null;
+  /**
+   * 직전 수집 대비 노출 증감. 수집이 1회뿐이면 null.
+   * 운영자에게는 "지금 몇인가"보다 "늘고 있는가"가 더 필요한 정보입니다.
+   */
+  impressionsDelta: number | null;
 }
 
 /* ------------------------------------------------------------------ *

@@ -74,3 +74,25 @@ export async function findLastCollectedAt(postIds: string[]): Promise<string | n
   );
   return doc ? doc.collectedAt.toISOString() : null;
 }
+
+/* ------------------------------------------------------------------ *
+ * 누적된 스냅샷 활용
+ *
+ * 스냅샷을 쌓아두기만 하고 최신 1건만 읽으면 시계열로 설계한 의미가 없습니다.
+ * 아래 두 함수가 "쌓아둔 이력"을 실제로 사용하는 지점입니다.
+ * ------------------------------------------------------------------ */
+
+/** 게시물 하나의 수집 이력 (오래된 순) — 상세 화면의 추이 스파크라인용 */
+export async function findMetricsHistory(
+  postId: string,
+  limit = 30,
+): Promise<PostMetricsSnapshot[]> {
+  const col = await collection<PostMetricsDoc>(COLLECTIONS.postMetrics);
+  const docs = await col
+    .find({ postId: new ObjectId(postId) })
+    .sort({ collectedAt: -1 })
+    .limit(limit)
+    .toArray();
+  // 조회는 최신순(인덱스 활용), 반환은 오래된 순(차트가 읽는 순서)
+  return docs.reverse().map(toMetricsDomain);
+}

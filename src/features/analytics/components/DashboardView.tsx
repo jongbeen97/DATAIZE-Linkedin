@@ -49,6 +49,14 @@ interface DashboardSummary {
     impressions: number | null;
     reactions: number | null;
   }>;
+  postPerformance: Array<{
+    id: string;
+    title: string;
+    impressions: number;
+    reactions: number;
+    leads: number;
+    conversionRate: number;
+  }>;
 }
 
 /**
@@ -59,7 +67,8 @@ interface DashboardSummary {
  *   ① 조치 필요 배너 (실패/예약 건수 → 클릭하면 필터된 목록으로 이동)
  *   ② 상태 분포 막대 + 누적 성과 (범례 클릭 = 필터 이동)
  *   ③ 14일 추이 차트 2종
- *   ④ 유입/리드 현황, 최근 게시물
+ *   ④ 게시물별 노출 → 리드 전환 (성과와 유입을 잇는 표)
+ *   ⑤ 유입/리드 현황, 최근 게시물
  *
  * 수치 카드를 균등하게 늘어놓지 않은 이유:
  * 모두 같은 크기면 무엇이 중요한지 화면이 말해주지 못합니다.
@@ -263,7 +272,75 @@ export function DashboardView() {
         </Card>
       </div>
 
-      {/* ─────────── ⑤ 리드 현황 + 최근 게시물 ─────────── */}
+      {/* ─────────── ⑤ 게시물별 노출 → 리드 전환 ───────────
+          '많이 보였다'와 '고객이 왔다'는 다른 이야기입니다.
+          성과 지표(postMetrics)와 유입 현황(leads.referrerPostId)을 이어
+          "어떤 글이 실제로 리드를 만들었나"에 답하는 표입니다. */}
+      {data.postPerformance.length > 0 && (
+        <Card padded={false}>
+          <div className="px-5 pt-5">
+            <CardTitle
+              right={
+                <span className="text-[11px] text-[var(--ink-muted)]">전환율 높은 순</span>
+              }
+            >
+              게시물별 성과 — 노출 대비 리드 전환
+            </CardTitle>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-y border-[var(--line)] text-[11px] text-[var(--ink-muted)]">
+                  <th className="px-5 py-2 text-left font-medium">게시물</th>
+                  <th className="px-3 py-2 text-right font-medium">노출</th>
+                  <th className="px-3 py-2 text-right font-medium">반응</th>
+                  <th className="px-3 py-2 text-right font-medium">유입 리드</th>
+                  <th className="px-5 py-2 text-right font-medium">전환율</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--line)]">
+                {data.postPerformance.map((p) => {
+                  const best = data.postPerformance[0].conversionRate || 1;
+                  return (
+                    <tr key={p.id}>
+                      <td className="px-5 py-2.5">
+                        <Link href={`/posts/${p.id}`} className="font-medium hover:underline">
+                          {truncate(p.title, 34)}
+                        </Link>
+                      </td>
+                      <td className="px-3 py-2.5 text-right tabular-nums">
+                        {formatNumber(p.impressions)}
+                      </td>
+                      <td className="px-3 py-2.5 text-right tabular-nums">
+                        {formatNumber(p.reactions)}
+                      </td>
+                      <td className="px-3 py-2.5 text-right tabular-nums">
+                        {formatNumber(p.leads)}
+                      </td>
+                      <td className="px-5 py-2.5">
+                        {/* 숫자만으로는 비교가 어려워 막대를 함께 둡니다 */}
+                        <div className="flex items-center justify-end gap-2">
+                          <div className="hidden h-1.5 w-20 overflow-hidden rounded-full bg-[var(--surface-sunken)] sm:block">
+                            <div
+                              className="h-full rounded-full bg-[var(--color-brand-500)]"
+                              style={{ width: `${(p.conversionRate / best) * 100}%` }}
+                            />
+                          </div>
+                          <span className="w-12 text-right font-semibold tabular-nums">
+                            {p.conversionRate.toFixed(2)}%
+                          </span>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      {/* ─────────── ⑥ 리드 현황 + 최근 게시물 ─────────── */}
       <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
         <Card>
           <CardTitle right={<Link href="/leads" className="text-xs text-[var(--color-brand-600)] hover:underline">전체 보기 →</Link>}>

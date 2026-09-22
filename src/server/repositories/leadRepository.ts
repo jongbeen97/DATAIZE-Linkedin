@@ -91,3 +91,24 @@ export async function insertLeads(leads: Array<Omit<Lead, 'id'>>): Promise<numbe
   );
   return res.insertedCount;
 }
+
+/**
+ * 게시물별 유입 리드 수.
+ *
+ * 과제의 "게시물 별 성과 지표"와 "유입/Lead 현황"이 만나는 지점입니다.
+ * 노출수만으로는 '많이 보였다'까지만 알 수 있고,
+ * 그 글이 실제로 고객을 데려왔는지는 referrerPostId 로만 알 수 있습니다.
+ */
+export async function countLeadsByPostIds(postIds: string[]): Promise<Map<string, number>> {
+  if (postIds.length === 0) return new Map();
+  const col = await collection<LeadDoc>(COLLECTIONS.leads);
+
+  const rows = await col
+    .aggregate<{ _id: ObjectId; count: number }>([
+      { $match: { referrerPostId: { $in: postIds.map((id) => new ObjectId(id)) } } },
+      { $group: { _id: '$referrerPostId', count: { $sum: 1 } } },
+    ])
+    .toArray();
+
+  return new Map(rows.map((r) => [r._id.toHexString(), r.count]));
+}

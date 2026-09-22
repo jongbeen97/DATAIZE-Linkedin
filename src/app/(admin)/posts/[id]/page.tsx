@@ -4,7 +4,9 @@ import { Card, CardTitle, Badge, Button } from '@/shared/ui/primitives';
 import { formatDateTime, formatNumber, formatRelative } from '@/shared/lib/format';
 import { requireSession } from '@/server/auth/session';
 import { findPostById } from '@/server/repositories/postRepository';
-import { findLatestMetrics } from '@/server/repositories/metricsRepository';
+import { findLatestMetrics, findMetricsHistory } from '@/server/repositories/metricsRepository';
+import { countLeadsByPostIds } from '@/server/repositories/leadRepository';
+import { Sparkline, Delta } from '@/shared/ui/Sparkline';
 import { isEditable } from '@/entities/post';
 import { PostEditor } from '@/features/posts/components/PostEditor';
 import { StatusBadge } from '@/features/posts/components/StatusBadge';
@@ -40,7 +42,17 @@ export default async function PostDetailPage({ params }: { params: Promise<{ id:
     );
   }
 
-  const metrics = await findLatestMetrics(post.id);
+  // 최신값만이 아니라 누적된 스냅샷 이력과 유입 리드까지 함께 읽습니다.
+  const [metrics, history, leadCounts] = await Promise.all([
+    findLatestMetrics(post.id),
+    findMetricsHistory(post.id),
+    countLeadsByPostIds([post.id]),
+  ]);
+  const leads = leadCounts.get(post.id) ?? 0;
+  const previous = history.length >= 2 ? history[history.length - 2] : null;
+  // 노출 대비 리드 전환율 — '많이 보였다'와 '고객이 왔다'는 다른 이야기입니다
+  const conversionRate =
+    metrics && metrics.impressions > 0 ? (leads / metrics.impressions) * 100 : 0;
 
   return (
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
@@ -90,13 +102,57 @@ export default async function PostDetailPage({ params }: { params: Promise<{ id:
         ) : (
           <>
             <dl className="space-y-2 text-sm">
-              <MetricRow label="노출" value={formatNumber(metrics.impressions)} />
-              <MetricRow label="도달" value={formatNumber(metrics.membersReached)} />
-              <MetricRow label="반응" value={formatNumber(metrics.reactions)} />
+              <MetricRow
+                label="노출"
+                value={formatNumber(metrics.impressions)}
+                delta={previous ? metrics.impressions - previous.impressions : 0}
+              />
+              <MetricRow
+                label="도달"
+                value={formatNumber(metrics.membersReached)}
+                delta={previous ? metrics.membersReached - previous.membersReached : 0}
+              />
+              <MetricRow
+                label="반응"
+                value={formatNumber(metrics.reactions)}
+                delta={previous ? metrics.reactions - previous.reactions : 0}
+              />
               <MetricRow label="댓글" value={formatNumber(metrics.comments)} />
               <MetricRow label="공유" value={formatNumber(metrics.shares)} />
               <MetricRow label="링크 클릭" value={formatNumber(metrics.clicks)} />
             </dl>
+
+            {/* 이 글이 실제로 고객을 데려왔는가 — 노출수만으로는 답할 수 없는 질문 */}
+            <div className="mt-4 rounded-lg bg-[var(--surface-sunken)] p-3">
+              <div className="flex items-baseline justify-between">
+                <span className="text-xs text-[var(--ink-muted)]">유입 리드</span>
+                <span className="text-lg font-semibold tabular-nums">{formatNumber(leads)}</span>
+              </div>
+              <div className="mt-1 flex items-baseline justify-between">
+                <span className="text-xs text-[var(--ink-muted)]">노출 대비 전환율</span>
+                <span className="text-sm font-semibold tabular-nums">
+                  {conversionRate.toFixed(2)}%
+                </span>
+              </div>
+            </div>
+
+            {/* 수집 이력이 2건 이상 쌓였을 때만 추이를 보여줍니다 */}
+            {history.length >= 2 && (
+              <div className="mt-4 border-t border-[var(--line)] pt-3">
+                <div className="mb-1.5 flex items-baseline justify-between">
+                  <span className="text-xs text-[var(--ink-muted)]">노출 추이</span>
+                  <span className="text-[10px] text-[var(--ink-subtle)]">
+                    {history.length}회 수집
+                  </span>
+                </div>
+                <Sparkline values={history.map((h) => h.impressions)} label="노출 추이" />
+                <div className="mt-1 flex justify-between text-[10px] text-[var(--ink-subtle)] tabular-nums">
+                  <span>{formatNumber(history[0].impressions)}</span>
+                  <span>{formatNumber(history[history.length - 1].impressions)}</span>
+                </div>
+              </div>
+            )}
+
             <p className="mt-3 text-[11px] text-[var(--ink-muted)]">
               마지막 수집: {formatRelative(metrics.collectedAt)}
             </p>
@@ -116,11 +172,14 @@ function Row({ label, value, mono }: { label: string; value: string; mono?: bool
   );
 }
 
-function MetricRow({ label, value }: { label: string; value: string }) {
+function MetricRow({ label, value, delta = 0 }: { label: string; value: string; delta?: number }) {
   return (
     <div className="flex items-center justify-between border-b border-[var(--line)] pb-1.5 last:border-0">
       <dt className="text-xs text-[var(--ink-muted)]">{label}</dt>
-      <dd className="font-semibold tabular-nums">{value}</dd>
+      <dd className="flex items-baseline gap-1.5">
+        <Delta value={delta} className="text-[10px] font-medium tabular-nums" />
+        <span className="font-semibold tabular-nums">{value}</span>
+      </dd>
     </div>
   );
 }

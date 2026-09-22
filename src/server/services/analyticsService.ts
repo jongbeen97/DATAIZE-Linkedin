@@ -38,6 +38,15 @@ export interface DashboardSummary {
     impressions: number | null;
     reactions: number | null;
   }>;
+  /** 게시물별 노출 → 리드 전환. 성과 지표와 유입 현황을 잇는 표 */
+  postPerformance: Array<{
+    id: string;
+    title: string;
+    impressions: number;
+    reactions: number;
+    leads: number;
+    conversionRate: number;
+  }>;
 }
 
 export async function buildDashboardSummary(userId: string): Promise<DashboardSummary> {
@@ -53,10 +62,11 @@ export async function buildDashboardSummary(userId: string): Promise<DashboardSu
       postRepo.listPosts({ userId, page: 1, pageSize: 5 }),
     ]);
 
-  const publishedIds = await postRepo.findPublishedPostIds(userId, 50);
-  const [metricsMap, collectedAt] = await Promise.all([
-    findLatestMetricsForPosts(publishedIds),
-    findLastCollectedAt(publishedIds),
+  const analyticsIds = await postRepo.findPostIdsForAnalytics(userId, 50);
+  const [metricsMap, collectedAt, leadsByPost] = await Promise.all([
+    findLatestMetricsForPosts(analyticsIds),
+    findLastCollectedAt(analyticsIds),
+    leadRepo.countLeadsByPostIds(analyticsIds),
   ]);
 
   const totals = { impressions: 0, reactions: 0, comments: 0, shares: 0, clicks: 0 };
@@ -88,6 +98,22 @@ export async function buildDashboardSummary(userId: string): Promise<DashboardSu
     leadStatusCounts,
     leadSourceCounts,
     recentLeads,
+    // 전환율 높은 순 — "어떤 글이 고객을 데려왔나"가 마케터의 실제 질문입니다
+    postPerformance: recent.items
+      .filter((p) => metricsMap.has(p.id))
+      .map((p) => {
+        const m = metricsMap.get(p.id)!;
+        const leads = leadsByPost.get(p.id) ?? 0;
+        return {
+          id: p.id,
+          title: p.title,
+          impressions: m.impressions,
+          reactions: m.reactions,
+          leads,
+          conversionRate: m.impressions > 0 ? (leads / m.impressions) * 100 : 0,
+        };
+      })
+      .sort((a, b) => b.conversionRate - a.conversionRate),
     recentPosts: recent.items.map((p) => ({
       id: p.id,
       title: p.title,

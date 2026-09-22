@@ -141,11 +141,69 @@ async function main() {
   console.log(`   DRAFT ${DRAFT_POSTS.length} · SCHEDULED ${SCHEDULED_POSTS.length} · FAILED ${FAILED_POSTS.length}`);
   console.log('   (PUBLISHED 는 실제 발행분만 남겨두기 위해 생성하지 않습니다)');
 
+  /* ---------------- 지표 수집 이력 ---------------- */
+  // 실제 운영에서는 [지금 새로고침]을 누를 때마다 스냅샷이 한 건씩 쌓여 추이가 생깁니다.
+  // 과제 시연 시점에는 발행 직후 1건뿐이라 추이 화면을 확인할 수 없으므로,
+  // 이미 수집된 최신값을 기준으로 '발행 후 경과 시간'에 따른 과거 값을 역산해 채웁니다.
+  //   value(h) = 최신값 × factor(h) / factor(경과시간)
+  //   factor(h) = 0.3 + min(1, log10(h+1)/2)   ← sampleProvider 와 같은 성장 곡선
+  const HISTORY_HOURS = [1, 3, 6, 12, 24, 48];
+  const factor = (h: number) => 0.3 + Math.min(1, Math.log10(h + 1) / 2);
+
+  let historyAdded = 0;
+  for (const post of await db.collection('posts').find({ linkedinUrn: { $ne: null } }).toArray()) {
+    const publishedAt = post.publishedAt as Date | null;
+    if (!publishedAt) continue;
+
+    const latest = await db
+      .collection('postMetrics')
+      .findOne({ postId: post._id }, { sort: { collectedAt: -1 } });
+    if (!latest) continue;
+
+    // 기존 스냅샷은 발행 직후에 수집된 값이므로 곡선의 출발점으로 봅니다.
+    const elapsedH = Math.max(
+      0,
+      (latest.collectedAt.getTime() - publishedAt.getTime()) / 3_600_000,
+    );
+    const baseFactor = factor(elapsedH);
+    const now = Date.now();
+
+    for (const h of HISTORY_HOURS) {
+      if (h <= elapsedH) continue;
+      const at = new Date(publishedAt.getTime() + h * 3_600_000);
+      if (at.getTime() > now) continue; // 미래 시점의 수집 기록은 만들지 않습니다
+      const ratio = factor(h) / baseFactor;
+
+      await db.collection('postMetrics').insertOne({
+        ...SEED_FLAG,
+        postId: post._id,
+        collectedAt: at,
+        source: 'sample',
+        impressions: Math.round((latest.impressions as number) * ratio),
+        membersReached: Math.round((latest.membersReached as number) * ratio),
+        reactions: Math.round((latest.reactions as number) * ratio),
+        comments: Math.round((latest.comments as number) * ratio),
+        shares: Math.round((latest.shares as number) * ratio),
+        clicks: Math.round((latest.clicks as number) * ratio),
+      });
+      historyAdded++;
+    }
+  }
+  if (historyAdded > 0) {
+    console.log(`
+✅ 지표 수집 이력 ${historyAdded}건 생성 (추이 차트 확인용)`);
+  }
+
   /* ---------------- 리드 ---------------- */
   // 실제로 발행된 게시물이 있으면 linkedin 유입 리드를 거기에 연결합니다.
   // → "어떤 게시물이 리드를 만들었는가"를 화면에서 확인할 수 있습니다.
+  // 이미 내려간 글(REMOVED)도 과거에는 리드를 만들었을 수 있으므로,
+  // 실제로 LinkedIn 에 올라간 적이 있는 글(URN 보유) 전체를 대상으로 합니다.
   const publishedIds = (
-    await db.collection('posts').find({ status: 'PUBLISHED' }, { projection: { _id: 1 } }).toArray()
+    await db
+      .collection('posts')
+      .find({ linkedinUrn: { $ne: null } }, { projection: { _id: 1 } })
+      .toArray()
   ).map((d) => d._id as ObjectId);
 
   const leadDocs = Array.from({ length: 42 }, (_, i) => {

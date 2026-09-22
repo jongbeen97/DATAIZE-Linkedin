@@ -74,7 +74,7 @@ export async function listPosts(params: ListPostsParams): Promise<ListPostsResul
 
   const [rows, total] = await Promise.all([
     col
-      .aggregate<PostDoc & { latestMetrics: PostMetricsDoc[] }>([
+      .aggregate<PostDoc & { recentMetrics: PostMetricsDoc[] }>([
         { $match: filter },
         { $sort: { createdAt: -1 } },
         { $skip: skip },
@@ -86,9 +86,11 @@ export async function listPosts(params: ListPostsParams): Promise<ListPostsResul
             pipeline: [
               { $match: { $expr: { $eq: ['$postId', '$$pid'] } } },
               { $sort: { collectedAt: -1 } },
-              { $limit: 1 },
+              // 최신 1건이 아니라 2건 — 두 번째가 있어야 증감을 계산할 수 있습니다.
+              // 게시물마다 따로 조회하면 N+1 이므로 이 $lookup 안에서 함께 가져옵니다.
+              { $limit: 2 },
             ],
-            as: 'latestMetrics',
+            as: 'recentMetrics',
           },
         },
       ])
@@ -97,10 +99,15 @@ export async function listPosts(params: ListPostsParams): Promise<ListPostsResul
   ]);
 
   return {
-    items: rows.map((row) => ({
-      ...toDomain(row),
-      metrics: row.latestMetrics[0] ? toMetricsDomain(row.latestMetrics[0]) : null,
-    })),
+    items: rows.map((row) => {
+      const [latest, previous] = row.recentMetrics;
+      return {
+        ...toDomain(row),
+        metrics: latest ? toMetricsDomain(latest) : null,
+        impressionsDelta:
+          latest && previous ? latest.impressions - previous.impressions : null,
+      };
+    }),
     total,
     page: params.page,
     pageSize: params.pageSize,
@@ -322,10 +329,20 @@ export async function dailyPublishedCounts(
   return fillDailySeries(rows, days);
 }
 
-export async function findPublishedPostIds(userId: string, limit = 50): Promise<string[]> {
+/**
+ * 성과 집계 대상 게시물 ID.
+ *
+ * PUBLISHED 뿐 아니라 REMOVED 도 포함합니다.
+ * LinkedIn 에서 내려간 글이라도 그동안 만들어 낸 노출·리드는 유효한 기록이라,
+ * 집계에서 빼면 글을 내리는 순간 누적 성과가 갑자기 줄어듭니다.
+ *
+ * ⚠️ 지표 '수집' 대상과는 다릅니다.
+ *    수집은 실제로 조회 가능한 PUBLISHED 만 대상으로 합니다 (refreshAllMetrics).
+ */
+export async function findPostIdsForAnalytics(userId: string, limit = 50): Promise<string[]> {
   const col = await collection<PostDoc>(COLLECTIONS.posts);
   const docs = await col
-    .find({ userId: new ObjectId(userId), status: 'PUBLISHED' })
+    .find({ userId: new ObjectId(userId), status: { $in: ['PUBLISHED', 'REMOVED'] } })
     .sort({ publishedAt: -1 })
     .limit(limit)
     .project<{ _id: ObjectId }>({ _id: 1 })

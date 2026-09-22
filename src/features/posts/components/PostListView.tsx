@@ -16,6 +16,7 @@ import {
   type PostWithMetrics,
 } from '@/entities/post';
 import { StatusBadge } from './StatusBadge';
+import { Delta } from '@/shared/ui/Sparkline';
 import * as api from '../api/postsApi';
 import type { PostListResponse } from '../api/postsApi';
 
@@ -245,7 +246,19 @@ export function PostListView() {
                         {post.publishedAt ? formatDateTime(post.publishedAt) : '-'}
                       </td>
                       <td className="px-3 py-3 text-right text-xs tabular-nums">
-                        {post.metrics ? formatNumber(post.metrics.impressions) : '-'}
+                        {post.metrics ? (
+                          <span className="inline-flex items-baseline gap-1.5">
+                            {formatNumber(post.metrics.impressions)}
+                            {post.impressionsDelta !== null && (
+                              <Delta
+                                value={post.impressionsDelta}
+                                className="text-[10px] font-medium"
+                              />
+                            )}
+                          </span>
+                        ) : (
+                          '-'
+                        )}
                       </td>
                       <td className="px-3 py-3 text-right text-xs tabular-nums">
                         {post.metrics ? formatNumber(post.metrics.reactions) : '-'}
