@@ -13,6 +13,7 @@ const TONE_BY_STATUS: Record<PostStatus, BadgeTone> = {
   PUBLISHING: 'amber',
   PUBLISHED: 'green',
   FAILED: 'rose',
+  REMOVED: 'neutral',
 };
 
 export function StatusBadge({ status }: { status: PostStatus }) {

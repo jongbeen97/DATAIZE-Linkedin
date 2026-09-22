@@ -71,8 +71,21 @@ npm run build        # 프로덕션 빌드
 유입/Lead 화면은 실제 랜딩이 있어야 데이터가 쌓이므로, 화면 확인용 예시 데이터를 제공합니다.
 
 ```bash
-npm run seed            # 최근 14일치 예시 리드 42건 생성 (.env.local 을 그대로 읽습니다)
+npm run seed            # 예시 데이터 생성 (.env.local 을 그대로 읽습니다)
+npm run seed:clean      # 예시 데이터만 삭제
 ```
+
+| 생성되는 데이터 | 수량 |
+|---|---|
+| 리드 | 42건 (최근 14일에 분산, 일부는 실제 발행 게시물에 유입 경로로 연결) |
+| 게시물 | 7건 — `DRAFT` 3 · `SCHEDULED` 2 · `FAILED` 2 |
+
+> **`PUBLISHED` 는 생성하지 않습니다.** 가짜 LinkedIn URN 을 넣으면 "실제로 발행한 것"처럼
+> 보이게 되므로, 발행 완료 상태는 실제로 LinkedIn 에 올린 게시물만 갖습니다.
+> `DRAFT`/`SCHEDULED`/`FAILED` 는 LinkedIn 에 닿은 적이 없는 로컬 상태라 예시로 만들어도 사실과 어긋나지 않습니다.
+>
+> 예시 데이터에는 `_seed: true` 표식이 붙습니다. `npm run seed:clean` 은 이 표식이 있는 문서만
+> 지우므로, **직접 작성·발행한 데이터는 삭제되지 않습니다.**
 
 ---
 
@@ -80,7 +93,7 @@ npm run seed            # 최근 14일치 예시 리드 42건 생성 (.env.local
 
 | 영역 | 기술 | 선택 이유 |
 |---|---|---|
-| 프레임워크 | **Next.js 15 (App Router)** | 화면과 API(Route Handlers)를 한 프로젝트에서 운영. LinkedIn **Client Secret 과 액세스 토큰이 서버에만 존재**해야 하는데, 서버 컴포넌트/라우트 핸들러가 이 경계를 자연스럽게 만들어 줍니다. |
+| 프레임워크 | **Next.js 16 (App Router)** | 화면과 API(Route Handlers)를 한 프로젝트에서 운영. LinkedIn **Client Secret 과 액세스 토큰이 서버에만 존재**해야 하는데, 서버 컴포넌트/라우트 핸들러가 이 경계를 자연스럽게 만들어 줍니다. |
 | 언어 | **TypeScript (strict)** | 외부 API 응답과 DB 문서, 화면 모델의 형태를 타입으로 고정해 런타임 오류를 컴파일 시점으로 끌어올립니다. |
 | UI | **React 19 + Tailwind CSS v4** | 디자인 토큰을 `globals.css` 한 곳에 정의해 "같은 의미는 항상 같은 색"이라는 UX 일관성을 코드로 강제합니다. |
 | DB | **MongoDB (공식 드라이버)** | ODM(Mongoose) 대신 드라이버를 직접 사용해 **스키마 설계·인덱스·집계 파이프라인을 명시적으로** 드러냈습니다. |
@@ -125,7 +138,7 @@ src/
 │
 ├── shared/                           # 도메인을 모르는 공용 자산
 │   ├── ui/                           #   Button, Card, Badge, Modal, Toast, EmptyState…
-│   ├── lib/                          #   api-response, http, format
+│   ├── lib/                          #   api-response, http, format, date
 │   └── config/env.ts
 │
 └── server/                           # ★ 서버 전용 (클라이언트 번들에 포함되지 않음)
@@ -146,6 +159,21 @@ app  →  features  →  entities  →  shared
 - `features/posts` 는 `features/leads` 를 **직접 import 하지 않습니다.** 필요하면 `app` 레이어에서 조합합니다.
 - `shared` 는 어떤 도메인도 알지 못합니다.
 - `entities` 는 DB 도 화면도 모릅니다. 그래서 `canTransition()` 같은 규칙을 **DB 없이 단위 테스트할 수 있습니다** (`npm run test`).
+
+### 타입이 구조를 강제합니다
+
+상태·에러 코드처럼 "빠짐없이 다뤄야 하는" 목록은 `Record<PostStatus, T>` 형태로 선언했습니다.
+덕분에 **목록에 항목을 추가하면 처리하지 않은 지점이 전부 컴파일 에러로 드러납니다.**
+
+실제로 이번에 `REMOVED` 상태(5-3)를 추가했을 때 TypeScript 가 두 곳을 짚어 주었습니다.
+
+```
+StatusBadge.tsx    Property 'REMOVED' is missing in type ... Record<PostStatus, BadgeTone>
+postRepository.ts  Property 'REMOVED' is missing in type ... Record<PostStatus, number>
+```
+
+상태를 늘리면서 뱃지 색 정의나 집계 초기값을 빠뜨리는 사고가 **구조적으로 불가능**합니다.
+같은 방식으로 `ApiErrorCode → HTTP status` 매핑도 강제됩니다.
 
 ### Spring Boot 대응표 (구조 의도 참고용)
 
@@ -170,6 +198,45 @@ app  →  features  →  entities  →  shared
 | **게시물 발행** | `POST /rest/posts` | `w_member_social` | ✅ **실연동** |
 | 게시물 상세 지표 | `GET /rest/memberCreatorPostAnalytics` | `r_member_postAnalytics` | ⚠️ **권한 심사 대기** |
 | 반응·댓글 수 | `GET /rest/socialMetadata/{urn}` | `r_member_social_feed` | ⚠️ **권한 심사 대기** |
+| **게시물 삭제** | `DELETE /rest/posts/{urn}` | `w_member_social` | ✅ **실연동** |
+| 게시물 생존 확인 | `GET /rest/posts/{urn}` | 읽기 권한 필요 | ❌ **403 확인됨** (아래) |
+
+**발행한 글조차 조회할 수 없습니다 — 실제로 호출해 확인했습니다**
+
+현재 승인된 scope 는 `openid profile email w_member_social` 이며, `w_member_social` 은
+**쓰기 전용**입니다. 우리가 직접 발행한 게시물을 되읽는 것도 거부됩니다.
+
+```
+GET /rest/posts/urn:li:share:7508071014522781696
+→ HTTP 403 {"code":"ACCESS_DENIED",
+            "message":"Not enough permissions to access: partnerApiPostsExternal.GET"}
+
+GET /rest/socialMetadata/urn:li:share:7508071014522781696
+→ HTTP 403 {"code":"ACCESS_DENIED",
+            "message":"Not enough permissions to access: partnerApiSocialMetadata.GET"}
+```
+
+**그런데 삭제(DELETE)는 허용됩니다 — 권한이 메서드 단위입니다**
+
+403 메시지를 자세히 보면 권한 키에 메서드 이름이 들어 있습니다.
+
+```
+Not enough permissions to access: partnerApiPostsExternal.GET.20260901
+                                                           ^^^
+```
+
+`GET` 이 막힌 것이지 리소스 전체가 막힌 것이 아니라고 판단해 실제로 호출해 확인했습니다.
+
+```
+DELETE /rest/posts/{urn}   → 404 NOT_FOUND   (403 이 아님 = 권한 통과, 대상이 없을 뿐)
+DELETE /v2/ugcPosts/{urn}  → 204 No Content
+```
+
+즉 `w_member_social` 하나로 **게시와 삭제가 모두 가능**하고, 읽기만 불가능합니다.
+이 발견으로 관리자 페이지에서 실제 게시물을 내릴 수 있게 되었습니다 (5-3).
+
+한편 조회가 막혀 있다는 사실은 여전히 유효하며, 이것이 지표 Provider 추상화와
+"삭제 여부 자동 감지 불가"의 근거입니다.
 
 - 호출 헤더: `LinkedIn-Version: 202609`, `X-Restli-Protocol-Version: 2.0.0`
 - 발행 응답의 게시물 URN 은 본문이 아니라 **응답 헤더 `x-restli-id`** 로 전달되며, 이를 저장해
@@ -222,11 +289,83 @@ LinkedIn 이 필드명을 바꿔도 수정 지점은 이 매핑 함수 하나입
 
 ```
 DRAFT ──┬──▶ SCHEDULED ──┐
-        │                 ├──▶ PUBLISHING ──┬──▶ PUBLISHED  (종착: 되돌릴 수 없음)
+        │                 ├──▶ PUBLISHING ──┬──▶ PUBLISHED ──▶ REMOVED  (종착)
         └─────────────────┘                 └──▶ FAILED ──▶ (재시도) PUBLISHING
 ```
 
-### 5-3. 중복 발행 방지 (멱등성 · 동시성)
+| 상태 | 의미 | 수정 | 삭제 |
+|---|---|---|---|
+| `DRAFT` | 초안 | ✅ | ✅ |
+| `SCHEDULED` | 예약 | ✅ | ✅ |
+| `PUBLISHING` | 발행 중 (외부 호출 진행) | ❌ | ❌ |
+| `PUBLISHED` | 발행 완료 | ❌ | ❌ |
+| `REMOVED` | LinkedIn 에서 삭제됨 | ❌ | ✅ |
+
+`PUBLISHED → REMOVED` 가 발행 이후의 **유일한 전이**입니다. 근거는 5-3 에 있습니다.
+
+### 5-3. 외부 시스템과의 정합성 — 삭제하지 않고 "정정"합니다
+
+LinkedIn 에 발행된 글은 **우리 DB 밖에 실체가 있습니다.** 두 방향 모두 문제가 생깁니다.
+
+| 상황 | 순진한 처리 | 실제 결과 |
+|---|---|---|
+| 관리자가 발행된 글을 삭제 | `posts` 문서 삭제 | LinkedIn 에는 글이 그대로 남고, 성과 지표·호출 로그·리드 유입 경로의 연결만 끊김 |
+| LinkedIn 에서 직접 글 삭제 | 아무 처리 없음 | 관리 화면에는 `PUBLISHED` 로 남아 링크가 404 |
+
+그래서 두 방향을 각각 막았습니다.
+
+**① 발행된 글은 관리 화면에서 삭제할 수 없습니다**
+
+```ts
+// entities/post.ts — 규칙을 도메인에 한 번만 정의
+export function isDeletable(status: PostStatus): boolean {
+  return status !== 'PUBLISHED' && status !== 'PUBLISHING';
+}
+```
+
+이 함수 하나를 **화면(버튼 노출)과 서버(요청 거부)가 함께 사용**합니다.
+버튼만 숨기면 API 를 직접 호출해 지울 수 있으므로, 서비스 계층에서도 같은 규칙으로 막습니다.
+
+**② 발행된 글을 내릴 때는 LinkedIn 까지 함께 처리합니다**
+
+관리자 페이지에서 기록만 지우면 LinkedIn 에는 글이 그대로 남습니다.
+그래서 "내리기"를 **LinkedIn 삭제 + 상태 정정** 한 동작으로 묶었습니다.
+
+```
+[LinkedIn에서 삭제]
+   └→ DELETE /rest/posts/{urn}     실제 게시물 삭제
+   └→ status: PUBLISHED → REMOVED  우리 기록은 남김
+```
+
+**우리 DB 문서는 지우지 않습니다.** 그 글이 만들어 낸 성과 지표와 리드 유입 경로는
+게시물이 내려간 뒤에도 유효한 데이터이기 때문입니다.
+(*"9월에 올린 글이 리드 13건을 만들었다"* 는 기록은 글과 함께 사라지면 안 됩니다)
+
+이미 LinkedIn 에서 지워진 글이면 `404` 가 돌아옵니다. 목적("LinkedIn 에 없게 한다")은
+이미 달성된 상태이므로 실패로 보지 않고, 상태만 정정한 뒤 안내 문구만 다르게 합니다.
+
+| LinkedIn 응답 | 처리 | 사용자 안내 |
+|---|---|---|
+| `204` | `REMOVED` 로 정정 | "LinkedIn 에서 게시물을 삭제했습니다" |
+| `404` | `REMOVED` 로 정정 | "이미 삭제된 게시물이었습니다. 상태를 정정했습니다" |
+| `401` / `403` | 상태 유지 | 재로그인 / 권한 확인 안내 |
+
+**③ LinkedIn 에서 직접 지운 글은 자동 감지되지 않습니다**
+
+LinkedIn 은 삭제 웹훅을 제공하지 않고, 조회는 403 이라 살아 있는 글과 삭제된 글을
+구분할 수 없습니다(4장). `403` 을 삭제로 간주하면 멀쩡한 게시물까지 `REMOVED` 가 되므로,
+**확인할 수 없는 것은 추측하지 않습니다.**
+
+| 응답 | 의미 | 처리 |
+|---|---|---|
+| `404` / `410` | 원본이 삭제됨 | `REMOVED` 로 정정 |
+| `403` | **확인 불가** (권한 없음) | 상태를 건드리지 않음 |
+
+지표 수집 시 404 를 감지하는 경로는 이미 구현돼 있어, 읽기 권한이 승인되면 그대로 동작합니다.
+그 전까지는 `[LinkedIn에서 삭제]` 가 같은 역할을 합니다 — 이미 지워진 글에 눌러도
+404 를 받아 상태가 정정되기 때문입니다.
+
+### 5-4. 중복 발행 방지 (멱등성 · 동시성)
 
 LinkedIn 게시는 **되돌릴 수 없는 작업**이므로 3중으로 막았습니다.
 
@@ -244,14 +383,14 @@ await col.findOneAndUpdate(
 );
 ```
 
-### 5-4. MongoDB 스키마와 설계 근거
+### 5-5. MongoDB 스키마와 설계 근거
 
 | 컬렉션 | 역할 | 설계 판단 |
 |---|---|---|
 | `users` | 관리자 계정 | `linkedinSub` unique — 로그인 시 upsert |
 | `oauthTokens` | LinkedIn 액세스 토큰 | **users 에 임베딩하지 않음.** 생명주기(만료·갱신)가 다르고, 조회 경로를 분리해 노출면을 줄이기 위함 |
 | `posts` | 게시물 | 상태·URN·실패사유·시도횟수를 한 문서에 |
-| `postMetrics` | 지표 **스냅샷** | **posts 에 임베딩하지 않음.** 지표는 시간에 따라 반복 수집되는 시계열이라 임베딩하면 문서가 무한히 커지고, 추이 분석도 불가능해집니다 |
+| `postMetrics` | 지표 **스냅샷** | **posts 에 임베딩하지 않음.** 지표는 시간에 따라 반복 수집되는 시계열이라 임베딩하면 문서가 무한히 커지고, 추이 분석도 불가능해집니다. 게시물 삭제 시에는 함께 정리해 고아 문서가 남지 않게 합니다 |
 | `leads` | 유입/리드 | `referrerPostId` 로 게시물 성과와 연결 |
 | `apiCallLogs` | LinkedIn 호출 로그 | TTL 인덱스로 **30일 후 자동 삭제** |
 
@@ -264,7 +403,7 @@ await col.findOneAndUpdate(
 | `postMetrics { postId, collectedAt: -1 }` | 게시물별 최신 스냅샷 조회 |
 | `apiCallLogs { createdAt }` *(TTL 30일)* | 로그 무한 증가 방지 |
 
-### 5-5. 집계는 애플리케이션이 아니라 DB 에서
+### 5-6. 집계는 애플리케이션이 아니라 DB 에서
 
 상태별 건수, 일자별 추이는 전부 MongoDB **aggregation pipeline** 으로 처리합니다.
 목록 화면의 지표는 `$lookup` 으로 게시물당 최신 스냅샷 1건씩 한 번에 붙여 **N+1 조회를 제거**했습니다.
@@ -277,7 +416,29 @@ await col.findOneAndUpdate(
 
 > 데이터가 없는 날도 0 으로 채워 반환합니다. 차트가 중간에 끊기면 "장애"로 오해하기 때문입니다.
 
-### 5-6. 지표 동기화 전략 (수집과 조회의 분리)
+**일자별 집계의 함정 — 타임존을 한 곳으로 모았습니다**
+
+DB 는 `$dateToString(timezone: 'Asia/Seoul')` 로 KST 날짜 키를 만드는데,
+애플리케이션이 `Date.toISOString()` 으로 빈 날짜를 채우면 **UTC 키**가 만들어집니다.
+KST 00:00 은 전날 15:00 UTC 이므로 두 키가 하루씩 어긋나고, 결과적으로 **오늘 데이터가 통째로 사라집니다.**
+
+```
+집계가 만드는 키 (KST)   2026-09-22   ← 오늘 유입 10건
+차트가 만드는 키 (UTC)   2026-09-21   ← 매칭 실패 → 0 으로 표시
+```
+
+그래서 두 곳이 같은 기준을 쓰도록 `shared/lib/date.ts` 로 일원화했습니다.
+
+```ts
+export const REPORT_TIMEZONE = 'Asia/Seoul';
+export function toDateKey(date: Date, tz = REPORT_TIMEZONE): string   // 'YYYY-MM-DD'
+export function recentDateKeys(days: number): string[]                // 최근 N일 키
+export function fillDailySeries(rows, days)                           // 빈 날짜 0 채우기
+```
+
+`npm run test` 의 `[4]` 블록이 이 경계를 검증합니다 (UTC 로 자르면 전날이 되는 케이스 포함).
+
+### 5-7. 지표 동기화 전략 (수집과 조회의 분리)
 
 LinkedIn 은 **멤버당 하루 150회** 호출 제한이 있습니다.
 화면을 열 때마다 호출하면 운영 시간 중에 한도가 소진됩니다.
@@ -290,7 +451,7 @@ LinkedIn 은 **멤버당 하루 150회** 호출 제한이 있습니다.
 화면에는 **"마지막 수집: N분 전"** 과 **[지금 새로고침]** 버튼을 함께 노출해,
 운영자가 보고 있는 숫자가 언제 기준인지 항상 알 수 있게 했습니다.
 
-### 5-7. 일관된 에러 처리
+### 5-8. 일관된 에러 처리
 
 모든 API 는 동일한 형태로 응답합니다.
 
@@ -307,13 +468,14 @@ LinkedIn 의 HTTP 상태코드는 도메인 에러 코드로 **번역**해서 �
 |---|---|---|
 | 401 | `LINKEDIN_TOKEN_EXPIRED` | 로그아웃 후 다시 로그인하면 해결됩니다 |
 | 403 | `LINKEDIN_PERMISSION_DENIED` | 개발자 포털 Products 에서 승인 상태를 확인하세요 |
+| 404 / 410 | `LINKEDIN_NOT_FOUND` | 원본이 삭제된 글입니다 → 상태를 `REMOVED` 로 정정 (5-3) |
 | 429 | `LINKEDIN_RATE_LIMITED` | 하루 150회 제한입니다. 시간을 두고 재시도하세요 |
 | 5xx | `LINKEDIN_UNAVAILABLE` | 일시 장애입니다. [재시도]를 눌러주세요 |
 
 재시도는 **429/5xx 에만** 지수 백오프(1s → 2s)로 수행합니다.
 4xx 는 재시도해도 결과가 같으므로 즉시 실패 처리합니다.
 
-### 5-8. 자격증명 보호
+### 5-9. 자격증명 보호
 
 - 액세스 토큰은 **AES-256-GCM 으로 암호화**해 저장합니다 (`server/crypto.ts`).
   GCM 은 인증 암호화 모드라 **위·변조도 감지**합니다. (`npm run test` 로 검증)
@@ -352,6 +514,8 @@ LinkedIn 의 HTTP 상태코드는 도메인 에러 코드로 **번역**해서 �
 | **빈 상태** | "없습니다"에서 끝내지 않고 **다음 행동 버튼**을 함께 제시 ([첫 게시물 작성] / [필터 초기화]) |
 | **에러 상태** | 원인 + **해결 방법** + [재시도] 버튼. 로그인 실패 사유도 화면에 그대로 노출 |
 | **파괴적 행동** | 게시·삭제 전 확인 모달 + 본문 재확인. "되돌릴 수 없습니다" 명시 |
+| **되돌릴 수 없는 것은 아예 막음** | 발행된 글에는 삭제 버튼을 노출하지 않습니다. 확인 모달보다 **선택지를 없애는 것**이 확실합니다 (5-3) |
+| **불일치를 숨기지 않음** | LinkedIn 에서 삭제된 글은 `LinkedIn 삭제됨` 뱃지로 표시하고 링크를 감춥니다. 죽은 링크를 그대로 두지 않습니다 |
 | **입력 보호** | 실시간 글자수 카운터(200자 남으면 주황, 초과하면 빨강), **자동 임시저장**(localStorage) |
 | **데이터 정직성** | 샘플 데이터에는 항상 배지 표시. 실제 값처럼 위장하지 않음 |
 | **일관성** | 상태 색은 `StatusBadge` **한 곳**에서만 정의 — 모든 화면에서 동일 |
@@ -369,6 +533,11 @@ LinkedIn 의 HTTP 상태코드는 도메인 에러 코드로 **번역**해서 �
 4. **리드 데이터** — 실제 랜딩 페이지가 범위 밖이라 `npm run seed` 로 예시 데이터를 제공합니다.
    스키마·집계·화면은 실제 데이터가 들어와도 그대로 동작합니다.
 5. **단일 사용자 기준** — 모든 데이터가 로그인한 LinkedIn 계정 단위로 격리됩니다. 팀 단위 권한은 미구현입니다.
+6. **LinkedIn 에서 직접 지운 글은 자동 감지되지 않습니다** — 삭제 웹훅이 없고,
+   `w_member_social` 은 쓰기 전용이라 게시물 조회가 403 입니다(4장). 살아 있는 글과
+   삭제된 글을 구분할 수 없어 403 을 삭제로 간주하지 않습니다.
+   관리자 페이지의 `[LinkedIn에서 삭제]` 를 사용하면 이미 지워진 글에도 404 를 받아
+   상태가 정정되므로 실무상 문제는 없습니다. 읽기 권한 승인 시 자동 감지가 동작합니다 (8-1).
 
 ---
 
@@ -381,6 +550,8 @@ LinkedIn 의 HTTP 상태코드는 도메인 에러 코드로 **번역**해서 �
 - **지표 수집 스케줄러** — 발행 직후 집중 수집 → 이후 간격을 늘리는 백오프 수집 정책.
 - **Dead Letter Queue** — 재시도를 모두 소진한 발행 실패 건을 별도 큐에 모아 운영자가 일괄 처리.
 - **토큰 자동 갱신** — 현재는 만료 시 재로그인을 안내합니다. refresh token 승인 시 자동 갱신으로 전환.
+- **정합성 동기화 배치** — 발행된 게시물의 생존 여부를 주기적으로 확인해 `REMOVED` 를 자동 반영.
+  현재는 운영자가 [지금 새로고침]을 눌러야 감지됩니다 (7-6).
 
 ### 8-2. 보안
 
@@ -404,6 +575,9 @@ LinkedIn 의 HTTP 상태코드는 도메인 에러 코드로 **번역**해서 �
 - **관측성** — Sentry(에러) + 구조화 로깅 + LinkedIn 호출 성공률/지연 대시보드.
 - **알림** — 게시 실패 시 Slack 웹훅으로 담당자에게 즉시 통보 (현재는 화면 확인 방식).
 - **CI/CD** — GitHub Actions 에서 `typecheck → lint → test → build` 후 Vercel 배포.
+- **ESLint 도입** — 현재는 `tsc --noEmit`(타입)과 `npm run test`(도메인 로직)로 검증합니다.
+  `any` 는 사용하지 않았으나(전수 확인), `@typescript-eslint/no-explicit-any` 규칙으로
+  **금지를 코드로 강제**하고 React Hooks 의존성 배열 검사를 추가하는 것이 다음 단계입니다.
 
 ---
 
@@ -413,7 +587,30 @@ LinkedIn 의 HTTP 상태코드는 도메인 에러 코드로 **번역**해서 �
 |---|---|
 | `/login` | LinkedIn OAuth 로그인 |
 | `/dashboard` | 조치 필요 항목 · 상태별 현황 · 누적 성과 · 14일 추이 · 유입/리드 · 최근 게시물 |
-| `/posts` | 상태 필터 · 검색 · 페이지네이션 · 게시/재시도/삭제 |
+| `/posts` | 상태 필터 · 검색 · 페이지네이션 · 게시 / 재시도 / 삭제 / LinkedIn에서 삭제 |
 | `/posts/new`, `/posts/[id]` | 작성·수정(미리보기·글자수·임시저장) / 발행 후 읽기 전용 상세 |
 | `/leads` | 유입 경로 분포 · 리드 상태별 현황 · 최근 유입 목록 |
 | `/logs` | LinkedIn API 호출 기록 (요청·응답·소요시간·에러코드) |
+
+---
+
+## 10. 검증
+
+DB 와 외부 API 없이 도메인 로직을 검증합니다. 실행에 약 1초 걸립니다.
+
+```bash
+npm run test
+```
+
+| 블록 | 검증 내용 |
+|---|---|
+| `[1]` 상태 전이 | 허용/차단 전이, 수정·삭제 가능 여부, `PUBLISHED → REMOVED` 예외 |
+| `[2]` 입력 검증 | 3,000자 초과, 빈 제목, 예약 시각 누락·과거 시각 |
+| `[3]` 토큰 암호화 | 원문 비노출, 복호화 일치, IV 무작위성, GCM 변조 탐지 |
+| `[4]` 일자별 집계 키 | 타임존 경계 — UTC 로 자르면 전날이 되는 케이스 포함 |
+
+```
+결과: 38 통과 / 0 실패
+```
+
+`[4]` 는 실제로 발생했던 버그(오늘 데이터가 차트에서 누락)를 재현하는 회귀 테스트입니다.

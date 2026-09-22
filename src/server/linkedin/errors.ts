@@ -29,6 +29,14 @@ export function mapLinkedInError(status: number, body: string): AppError {
           code: 'LINKEDIN_BAD_REQUEST' as const,
           message: `LinkedIn 이 요청을 거절했습니다. 본문 내용을 확인해 주세요. (${detail})`,
         };
+      case 404:
+      case 410:
+        // 게시물이 LinkedIn 에서 삭제된 경우입니다.
+        // 재시도해도 의미가 없으므로 별도 코드로 구분해 상태 정정에 사용합니다.
+        return {
+          code: 'LINKEDIN_NOT_FOUND' as const,
+          message: 'LinkedIn 에서 해당 게시물을 찾을 수 없습니다. 이미 삭제된 것으로 보입니다.',
+        };
       case 429:
         return {
           code: 'LINKEDIN_RATE_LIMITED' as const,

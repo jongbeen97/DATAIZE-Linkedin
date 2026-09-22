@@ -42,6 +42,15 @@ export function publishPost(id: string): Promise<ApiResult<Post>> {
   return apiCall<Post>(`/api/posts/${id}/publish`, { method: 'POST' });
 }
 
-export function refreshMetrics(): Promise<ApiResult<{ updated: number; failed: number }>> {
+/** LinkedIn 의 실제 게시물을 삭제하고 기록은 REMOVED 로 남김 */
+export function unpublishPost(
+  id: string,
+): Promise<ApiResult<{ post: Post; alreadyGone: boolean }>> {
+  return apiCall(`/api/posts/${id}/unpublish`, { method: 'POST' });
+}
+
+export function refreshMetrics(): Promise<
+  ApiResult<{ updated: number; failed: number; removed: number }>
+> {
   return apiCall('/api/metrics/refresh', { method: 'POST' });
 }

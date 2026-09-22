@@ -1,0 +1,15 @@
+# 저장소에는 항상 LF 로 저장합니다.
+# Windows / macOS / Linux 어디서 클론해도 diff 가 줄바꿈 때문에 어지러워지지 않습니다.
+* text=auto eol=lf
+
+# 바이너리는 변환하지 않습니다 (스크린샷 · 데모 영상)
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.webp binary
+*.mp4  binary
+*.mov  binary
+*.ico  binary
+*.woff binary
+*.woff2 binary

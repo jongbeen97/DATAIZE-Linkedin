@@ -57,6 +57,41 @@ export async function publishMemberPost(input: {
   return { urn, url: buildPostUrl(urn) };
 }
 
+/**
+ * LinkedIn 게시물 삭제 (개인 계정)
+ *
+ *   DELETE https://api.linkedin.com/rest/posts/{urn}
+ *   권한: w_member_social — 게시와 같은 쓰기 권한으로 동작합니다.
+ *
+ * ⚠️ 조회(GET)는 403 이지만 삭제(DELETE)는 허용됩니다.
+ *    LinkedIn 의 권한 키가 메서드 단위(`partnerApiPostsExternal.GET`)로 나뉘어 있기 때문입니다.
+ *    실제 호출로 확인했습니다. (README 4장)
+ *
+ * 이미 LinkedIn 에서 지워진 게시물이면 404 가 돌아옵니다.
+ * 이 경우도 "결과적으로 LinkedIn 에 없다"는 목적은 동일하므로 성공으로 취급하고,
+ * 실제로 우리가 지웠는지(`alreadyGone`)만 구분해 안내 문구를 다르게 합니다.
+ */
+export async function deleteMemberPost(input: {
+  userId: string;
+  urn: string;
+}): Promise<{ alreadyGone: boolean }> {
+  try {
+    await linkedinFetch<unknown>({
+      userId: input.userId,
+      method: 'DELETE',
+      path: `/rest/posts/${encodeURIComponent(input.urn)}`,
+      useVersionHeader: true,
+      maxRetries: 0, // 삭제는 재시도하지 않는다 (이미 성공했을 수 있음)
+    });
+    return { alreadyGone: false };
+  } catch (e) {
+    if (e instanceof AppError && e.code === 'LINKEDIN_NOT_FOUND') {
+      return { alreadyGone: true };
+    }
+    throw e;
+  }
+}
+
 export function buildPostUrl(urn: string): string {
   return `https://www.linkedin.com/feed/update/${urn}`;
 }

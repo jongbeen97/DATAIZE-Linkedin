@@ -7,7 +7,14 @@ import { Button, Card, Badge, EmptyState, ErrorState, Skeleton, Modal } from '@/
 import { useToast } from '@/shared/ui/toast';
 import { hintFor } from '@/shared/lib/http';
 import { formatDateTime, formatNumber, truncate, cx } from '@/shared/lib/format';
-import { POST_STATUSES, POST_STATUS_LABEL, type PostStatus, type PostWithMetrics } from '@/entities/post';
+import {
+  POST_STATUSES,
+  POST_STATUS_LABEL,
+  isDeletable,
+  isLiveOnLinkedIn,
+  type PostStatus,
+  type PostWithMetrics,
+} from '@/entities/post';
 import { StatusBadge } from './StatusBadge';
 import * as api from '../api/postsApi';
 import type { PostListResponse } from '../api/postsApi';
@@ -37,7 +44,10 @@ export function PostListView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<{ message: string; hint: string } | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [confirm, setConfirm] = useState<{ post: PostWithMetrics; kind: 'publish' | 'delete' } | null>(null);
+  const [confirm, setConfirm] = useState<{
+    post: PostWithMetrics;
+    kind: 'publish' | 'delete' | 'remove';
+  } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -89,6 +99,22 @@ export function PostListView() {
         `'${truncate(post.title, 20)}' 게시물이 LinkedIn 에 발행되었습니다.`,
         res.data.linkedinUrl ? { url: res.data.linkedinUrl, label: 'LinkedIn 에서 보기' } : undefined,
       );
+    }
+    void load();
+  }
+
+  /** LinkedIn 의 실제 게시물을 삭제 (우리 기록은 REMOVED 로 보존) */
+  async function runUnpublish(post: PostWithMetrics) {
+    setConfirm(null);
+    setBusyId(post.id);
+    const res = await api.unpublishPost(post.id);
+    setBusyId(null);
+    if (!res.ok) {
+      toast.error(`${res.error.message} ${hintFor(res.error)}`);
+    } else if (res.data.alreadyGone) {
+      toast.success('이미 LinkedIn 에서 삭제된 게시물이었습니다. 상태를 정정했습니다.');
+    } else {
+      toast.success('LinkedIn 에서 게시물을 삭제했습니다. 성과 기록은 그대로 보존됩니다.');
     }
     void load();
   }
@@ -226,12 +252,27 @@ export function PostListView() {
                       </td>
                       <td className="px-5 py-3">
                         <div className="flex items-center justify-end gap-1.5">
-                          {post.linkedinUrl && (
+                          {post.linkedinUrl && isLiveOnLinkedIn(post.status) && (
                             <a href={post.linkedinUrl} target="_blank" rel="noopener noreferrer">
                               <Button size="sm" variant="ghost">
                                 LinkedIn ↗
                               </Button>
                             </a>
+                          )}
+                          {post.status === 'PUBLISHED' && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              loading={busyId === post.id}
+                              onClick={() => setConfirm({ post, kind: 'remove' })}
+                            >
+                              LinkedIn에서 삭제
+                            </Button>
+                          )}
+                          {post.status === 'REMOVED' && (
+                            <span className="text-xs text-[var(--ink-muted)]">
+                              LinkedIn 에서 삭제됨
+                            </span>
                           )}
                           {(post.status === 'DRAFT' ||
                             post.status === 'SCHEDULED' ||
@@ -245,7 +286,7 @@ export function PostListView() {
                               {post.status === 'FAILED' ? '재시도' : '게시'}
                             </Button>
                           )}
-                          {post.status !== 'PUBLISHING' && (
+                          {isDeletable(post.status) && (
                             <Button
                               size="sm"
                               variant="ghost"
@@ -295,7 +336,13 @@ export function PostListView() {
       {/* ------------------------- 확인 모달 ------------------------- */}
       <Modal
         open={confirm !== null}
-        title={confirm?.kind === 'delete' ? '게시물을 삭제할까요?' : '실제 LinkedIn 에 게시됩니다'}
+        title={
+          confirm?.kind === 'delete'
+            ? '게시물을 삭제할까요?'
+            : confirm?.kind === 'remove'
+              ? '실제 LinkedIn 게시물을 삭제합니다'
+              : '실제 LinkedIn 에 게시됩니다'
+        }
         onClose={() => setConfirm(null)}
         footer={
           <>
@@ -303,13 +350,21 @@ export function PostListView() {
               취소
             </Button>
             <Button
-              variant={confirm?.kind === 'delete' ? 'danger' : 'primary'}
-              onClick={() =>
-                confirm &&
-                (confirm.kind === 'delete' ? void runDelete(confirm.post) : void runPublish(confirm.post))
+              variant={
+                confirm?.kind === 'delete' || confirm?.kind === 'remove' ? 'danger' : 'primary'
               }
+              onClick={() => {
+                if (!confirm) return;
+                if (confirm.kind === 'delete') void runDelete(confirm.post);
+                else if (confirm.kind === 'remove') void runUnpublish(confirm.post);
+                else void runPublish(confirm.post);
+              }}
             >
-              {confirm?.kind === 'delete' ? '삭제' : '네, 지금 게시합니다'}
+              {confirm?.kind === 'delete'
+                ? '삭제'
+                : confirm?.kind === 'remove'
+                  ? '네, LinkedIn 에서 삭제합니다'
+                  : '네, 지금 게시합니다'}
             </Button>
           </>
         }
@@ -318,6 +373,21 @@ export function PostListView() {
           <p>
             &lsquo;{confirm.post.title}&rsquo; 게시물을 삭제합니다. 이 작업은 되돌릴 수 없습니다.
           </p>
+        ) : confirm?.kind === 'remove' ? (
+          <div className="space-y-2 leading-relaxed">
+            <p>
+              &lsquo;{confirm.post.title}&rsquo; 을(를){' '}
+              <strong className="text-[var(--ink)]">LinkedIn 에서 실제로 삭제합니다.</strong> 이
+              작업은 되돌릴 수 없습니다.
+            </p>
+            <p className="text-[var(--ink-muted)]">
+              관리자 페이지의 기록은 <strong>LinkedIn 삭제됨</strong> 상태로 남습니다. 노출·반응 등
+              성과 지표와 이 글을 통해 들어온 리드 정보는 그대로 보존됩니다.
+            </p>
+            <p className="text-[var(--ink-muted)]">
+              이미 LinkedIn 에서 지우신 글이라면, 상태만 정정됩니다.
+            </p>
+          </div>
         ) : (
           <>
             <p className="leading-relaxed">

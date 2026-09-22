@@ -15,6 +15,7 @@ export const POST_STATUSES = [
   'PUBLISHING', // 발행 중 — LinkedIn API 호출 진행 중 (중복 발행 차단 구간)
   'PUBLISHED', // 발행 완료 — LinkedIn URN 확보됨
   'FAILED', // 발행 실패 — 사유가 failReason 에 기록됨
+  'REMOVED', // LinkedIn 에서 삭제됨 — 성과·리드 기록은 보존한 채 상태만 정정
 ] as const;
 
 export type PostStatus = (typeof POST_STATUSES)[number];
@@ -25,6 +26,7 @@ export const POST_STATUS_LABEL: Record<PostStatus, string> = {
   PUBLISHING: '발행 중',
   PUBLISHED: '발행 완료',
   FAILED: '실패',
+  REMOVED: 'LinkedIn 삭제됨',
 };
 
 /**
@@ -38,8 +40,11 @@ const ALLOWED_TRANSITIONS: Record<PostStatus, readonly PostStatus[]> = {
   DRAFT: ['SCHEDULED', 'PUBLISHING'],
   SCHEDULED: ['PUBLISHING', 'DRAFT'],
   PUBLISHING: ['PUBLISHED', 'FAILED'],
-  PUBLISHED: [], // 발행된 글은 되돌릴 수 없다 (LinkedIn 에 이미 올라갔으므로)
+  // 발행된 글은 우리가 되돌릴 수 없다. 단 하나의 예외가 LinkedIn 쪽에서
+  // 직접 삭제된 경우이며, 이때만 REMOVED 로 상태를 정정한다.
+  PUBLISHED: ['REMOVED'],
   FAILED: ['PUBLISHING', 'DRAFT'], // 재시도 또는 초안으로 되돌리기
+  REMOVED: [], // 종착역 — 원본이 사라졌으므로 되살릴 수 없다
 };
 
 export function canTransition(from: PostStatus, to: PostStatus): boolean {
@@ -49,6 +54,26 @@ export function canTransition(from: PostStatus, to: PostStatus): boolean {
 /** 편집(내용 수정)이 가능한 상태인지 */
 export function isEditable(status: PostStatus): boolean {
   return status === 'DRAFT' || status === 'SCHEDULED' || status === 'FAILED';
+}
+
+/**
+ * 관리자 페이지에서 삭제할 수 있는 상태인지.
+ *
+ * PUBLISHED 를 제외하는 이유: 글은 LinkedIn 에 그대로 살아 있는데 관리 기록만
+ * 사라지면, 실제 게시물은 남은 채 성과 지표 / 호출 로그 / 리드 유입 경로의
+ * 연결이 끊깁니다. 실제로 내리려면 LinkedIn 에서 직접 삭제해야 합니다.
+ * PUBLISHING 은 외부 호출이 진행 중이라 결과를 확정한 뒤에만 다룹니다.
+ *
+ * REMOVED 는 원본이 이미 LinkedIn 에서 사라진 상태이므로 삭제를 허용합니다.
+ * (그래도 기본은 '보관' — 지우면 그 글이 만든 리드 기록까지 함께 사라집니다)
+ */
+export function isDeletable(status: PostStatus): boolean {
+  return status !== 'PUBLISHED' && status !== 'PUBLISHING';
+}
+
+/** LinkedIn 에 실제 게시물이 살아 있는 상태인지 (링크를 열어볼 수 있는지) */
+export function isLiveOnLinkedIn(status: PostStatus): boolean {
+  return status === 'PUBLISHED';
 }
 
 /* ------------------------------------------------------------------ *

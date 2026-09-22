@@ -91,9 +91,17 @@ export function DashboardView() {
       toast.error(`${res.error.message} ${hintFor(res.error)}`);
       return;
     }
-    toast.success(
-      `지표를 갱신했습니다. (성공 ${res.data.updated}건${res.data.failed ? `, 실패 ${res.data.failed}건` : ''})`,
-    );
+    const { updated, failed, removed } = res.data;
+    // LinkedIn 에서 원본이 삭제된 글을 발견한 경우, 그 사실을 분명히 알립니다.
+    if (removed > 0) {
+      toast.error(
+        `LinkedIn 에서 삭제된 게시물 ${removed}건을 발견해 'LinkedIn 삭제됨' 으로 표시했습니다. (지표 갱신 ${updated}건)`,
+      );
+    } else {
+      toast.success(
+        `지표를 갱신했습니다. (성공 ${updated}건${failed ? `, 실패 ${failed}건` : ''})`,
+      );
+    }
     void load();
   }
 

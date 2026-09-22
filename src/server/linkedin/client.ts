@@ -27,7 +27,7 @@ export interface LinkedInResponse<T> {
  */
 export async function linkedinFetch<T>(options: {
   userId: string;
-  method: 'GET' | 'POST';
+  method: 'GET' | 'POST' | 'DELETE';
   path: string;
   body?: unknown;
   /** REST(/rest/*) 는 LinkedIn-Version 헤더가 필수, 구형(/v2/*) 은 불필요 */

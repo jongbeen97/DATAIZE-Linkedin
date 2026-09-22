@@ -1,9 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import { AppError } from '@/shared/lib/api-response';
-import { canTransition, isEditable, type Post } from '@/entities/post';
+import { canTransition, isEditable, isDeletable, type Post } from '@/entities/post';
 import * as postRepo from '@/server/repositories/postRepository';
 import { findUserById } from '@/server/repositories/userRepository';
-import { publishMemberPost } from '@/server/linkedin/posts';
+import { publishMemberPost, deleteMemberPost } from '@/server/linkedin/posts';
 import { getMetricsProvider } from '@/server/linkedin/metrics';
 import { saveMetricsSnapshot } from '@/server/repositories/metricsRepository';
 import type { CreatePostInput, UpdatePostInput } from '@/features/posts/model/schema';
@@ -55,9 +55,20 @@ export async function updatePost(
 export async function removePost(userId: string, postId: string): Promise<void> {
   const current = await postRepo.findPostById(userId, postId);
   if (!current) throw new AppError('NOT_FOUND', '게시물을 찾을 수 없습니다.');
-  if (current.status === 'PUBLISHING') {
-    throw new AppError('INVALID_STATUS_TRANSITION', '발행 중인 게시물은 삭제할 수 없습니다.');
+
+  // 삭제 가능 여부는 도메인 규칙(entities/post) 한 곳에서만 정의합니다.
+  // 화면의 버튼 노출도 같은 함수를 쓰므로 둘이 어긋날 수 없습니다.
+  if (!isDeletable(current.status)) {
+    if (current.status === 'PUBLISHING') {
+      throw new AppError('INVALID_STATUS_TRANSITION', '발행 중인 게시물은 삭제할 수 없습니다.');
+    }
+    throw new AppError(
+      'INVALID_STATUS_TRANSITION',
+      '이미 LinkedIn 에 발행된 게시물은 삭제할 수 없습니다. 실제 게시물을 내리려면 LinkedIn 에서 직접 삭제해 주세요.',
+      { linkedinUrl: current.linkedinUrl },
+    );
   }
+
   await postRepo.deletePost(userId, postId);
 }
 
@@ -145,25 +156,83 @@ export async function publishPost(userId: string, postId: string): Promise<Post>
   }
 }
 
+/**
+ * LinkedIn 게시물 내리기 (발행 취소).
+ *
+ *   DELETE /rest/posts/{urn}  →  실제 LinkedIn 게시물 삭제
+ *   우리 DB 는 지우지 않고 status 만 REMOVED 로 남깁니다.
+ *
+ * 기록을 남기는 이유는 이 글이 만들어 낸 성과 지표와 리드 유입 경로가
+ * 게시물이 내려간 뒤에도 유효한 데이터이기 때문입니다.
+ *
+ * LinkedIn 에서 이미 삭제된 글이면 404 가 돌아옵니다. 목적("LinkedIn 에 없게 한다")은
+ * 이미 달성된 상태이므로 실패로 보지 않고, 상태만 정정한 뒤 안내 문구를 다르게 합니다.
+ */
+export async function unpublishPost(
+  userId: string,
+  postId: string,
+): Promise<{ post: Post; alreadyGone: boolean }> {
+  const post = await postRepo.findPostById(userId, postId);
+  if (!post) throw new AppError('NOT_FOUND', '게시물을 찾을 수 없습니다.');
+
+  if (!canTransition(post.status, 'REMOVED')) {
+    throw new AppError(
+      'INVALID_STATUS_TRANSITION',
+      `'${post.status}' 상태에서는 사용할 수 없습니다. LinkedIn 에 발행된 게시물에만 해당합니다.`,
+    );
+  }
+  if (!post.linkedinUrn) {
+    throw new AppError(
+      'INVALID_STATUS_TRANSITION',
+      'LinkedIn 게시물 식별자(URN)가 없어 삭제를 요청할 수 없습니다.',
+    );
+  }
+
+  const { alreadyGone } = await deleteMemberPost({ userId, urn: post.linkedinUrn });
+  await postRepo.markRemoved(postId);
+
+  const updated = await postRepo.findPostById(userId, postId);
+  return { post: updated!, alreadyGone };
+}
+
 /* ------------------------------------------------------------------ *
  * 지표 수집
  * ------------------------------------------------------------------ */
 
+/**
+ * 게시물 하나의 지표를 수집합니다.
+ *
+ * LinkedIn 에서 원본이 삭제되면 여기서 404 가 돌아옵니다.
+ * 외부 시스템의 삭제를 알려주는 웹훅이 없으므로, 이 수집 시점이
+ * 불일치를 감지할 수 있는 유일한 지점입니다. 감지하면 상태만 REMOVED 로
+ * 정정하고 지표·로그·리드 기록은 그대로 보존합니다.
+ *
+ * @returns 원본이 삭제되어 상태를 정정했으면 true
+ */
 export async function collectMetricsFor(
   userId: string,
   postId: string,
   postUrn: string,
   publishedAt: string | null,
-): Promise<void> {
+): Promise<{ removed: boolean }> {
   const provider = getMetricsProvider();
-  const raw = await provider.fetchPostMetrics({ userId, postId, postUrn, publishedAt });
-  await saveMetricsSnapshot({ postId, ...raw });
+  try {
+    const raw = await provider.fetchPostMetrics({ userId, postId, postUrn, publishedAt });
+    await saveMetricsSnapshot({ postId, ...raw });
+    return { removed: false };
+  } catch (e) {
+    if (e instanceof AppError && e.code === 'LINKEDIN_NOT_FOUND') {
+      await postRepo.markRemoved(postId);
+      return { removed: true };
+    }
+    throw e;
+  }
 }
 
 /** 발행된 모든 게시물의 지표를 한 번에 갱신 (화면의 [지금 새로고침] 버튼) */
 export async function refreshAllMetrics(
   userId: string,
-): Promise<{ updated: number; failed: number }> {
+): Promise<{ updated: number; failed: number; removed: number }> {
   const result = await postRepo.listPosts({
     userId,
     status: 'PUBLISHED',
@@ -173,15 +242,17 @@ export async function refreshAllMetrics(
 
   let updated = 0;
   let failed = 0;
+  let removed = 0;
 
   for (const post of result.items) {
     if (!post.linkedinUrn) continue;
     try {
-      await collectMetricsFor(userId, post.id, post.linkedinUrn, post.publishedAt);
-      updated++;
+      const r = await collectMetricsFor(userId, post.id, post.linkedinUrn, post.publishedAt);
+      if (r.removed) removed++;
+      else updated++;
     } catch {
       failed++;
     }
   }
-  return { updated, failed };
+  return { updated, failed, removed };
 }

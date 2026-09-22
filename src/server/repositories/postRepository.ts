@@ -1,5 +1,6 @@
 import { ObjectId, Filter } from 'mongodb';
 import { collection, COLLECTIONS } from '@/server/db/mongo';
+import { REPORT_TIMEZONE, sinceDaysAgo, fillDailySeries } from '@/shared/lib/date';
 import type { Post, PostStatus, PostVisibility, PostWithMetrics } from '@/entities/post';
 import type { PostDoc, PostMetricsDoc } from './types';
 import { toMetricsDomain } from './metricsRepository';
@@ -164,7 +165,13 @@ export async function updatePostContent(
 export async function deletePost(userId: string, postId: string): Promise<boolean> {
   const col = await collection<PostDoc>(COLLECTIONS.posts);
   const res = await col.deleteOne({ _id: new ObjectId(postId), userId: new ObjectId(userId) });
-  return res.deletedCount === 1;
+  if (res.deletedCount !== 1) return false;
+
+  // 게시물만 지우면 지표 문서가 고아로 남습니다. 어떤 화면에서도 보이지 않은 채
+  // 계속 쌓이므로 게시물과 함께 정리합니다.
+  const metrics = await collection<PostMetricsDoc>(COLLECTIONS.postMetrics);
+  await metrics.deleteMany({ postId: new ObjectId(postId) });
+  return true;
 }
 
 /* ------------------------------------------------------------------ *
@@ -229,6 +236,20 @@ export async function markPublished(
   );
 }
 
+/**
+ * LinkedIn 에서 원본이 삭제된 것을 확인했을 때 상태만 정정합니다.
+ * 성과 지표 / 호출 로그 / 리드 유입 기록은 그대로 보존합니다.
+ * (이미 REMOVED 면 아무 일도 하지 않습니다 — 멱등)
+ */
+export async function markRemoved(postId: string): Promise<boolean> {
+  const col = await collection<PostDoc>(COLLECTIONS.posts);
+  const res = await col.updateOne(
+    { _id: new ObjectId(postId), status: 'PUBLISHED' },
+    { $set: { status: 'REMOVED', updatedAt: new Date() } },
+  );
+  return res.modifiedCount === 1;
+}
+
 export async function markFailed(postId: string, code: string, reason: string): Promise<void> {
   const col = await collection<PostDoc>(COLLECTIONS.posts);
   await col.updateOne(
@@ -264,6 +285,7 @@ export async function countByStatus(userId: string): Promise<Record<PostStatus, 
     PUBLISHING: 0,
     PUBLISHED: 0,
     FAILED: 0,
+    REMOVED: 0,
   };
   for (const row of rows) base[row._id] = row.count;
   return base;
@@ -275,8 +297,6 @@ export async function dailyPublishedCounts(
   days: number,
 ): Promise<Array<{ date: string; count: number }>> {
   const col = await collection<PostDoc>(COLLECTIONS.posts);
-  const since = new Date(Date.now() - (days - 1) * 24 * 60 * 60 * 1000);
-  since.setHours(0, 0, 0, 0);
 
   const rows = await col
     .aggregate<{ _id: string; count: number }>([
@@ -284,13 +304,13 @@ export async function dailyPublishedCounts(
         $match: {
           userId: new ObjectId(userId),
           status: 'PUBLISHED',
-          publishedAt: { $gte: since },
+          publishedAt: { $gte: sinceDaysAgo(days) },
         },
       },
       {
         $group: {
           _id: {
-            $dateToString: { format: '%Y-%m-%d', date: '$publishedAt', timezone: 'Asia/Seoul' },
+            $dateToString: { format: '%Y-%m-%d', date: '$publishedAt', timezone: REPORT_TIMEZONE },
           },
           count: { $sum: 1 },
         },
@@ -298,15 +318,8 @@ export async function dailyPublishedCounts(
     ])
     .toArray();
 
-  const map = new Map(rows.map((r) => [r._id, r.count]));
-
-  // 데이터가 없는 날도 0 으로 채워야 차트가 끊기지 않는다
-  return Array.from({ length: days }, (_, i) => {
-    const d = new Date(since);
-    d.setDate(since.getDate() + i);
-    const key = d.toISOString().slice(0, 10);
-    return { date: key, count: map.get(key) ?? 0 };
-  });
+  // 집계와 동일한 타임존 기준 키로 채웁니다. 데이터가 없는 날도 0 으로 채워야 차트가 끊기지 않습니다.
+  return fillDailySeries(rows, days);
 }
 
 export async function findPublishedPostIds(userId: string, limit = 50): Promise<string[]> {

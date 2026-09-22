@@ -1,5 +1,6 @@
 import { ObjectId } from 'mongodb';
 import { collection, COLLECTIONS } from '@/server/db/mongo';
+import { REPORT_TIMEZONE, sinceDaysAgo, fillDailySeries } from '@/shared/lib/date';
 import type { Lead, LeadSource, LeadStatus } from '@/entities/lead';
 import type { LeadDoc } from './types';
 
@@ -55,28 +56,23 @@ export async function countLeadsBySource(): Promise<Array<{ source: LeadSource; 
 /** 최근 N일 일자별 신규 리드 수 */
 export async function dailyLeadCounts(days: number): Promise<Array<{ date: string; count: number }>> {
   const col = await collection<LeadDoc>(COLLECTIONS.leads);
-  const since = new Date(Date.now() - (days - 1) * 24 * 60 * 60 * 1000);
-  since.setHours(0, 0, 0, 0);
 
   const rows = await col
     .aggregate<{ _id: string; count: number }>([
-      { $match: { createdAt: { $gte: since } } },
+      { $match: { createdAt: { $gte: sinceDaysAgo(days) } } },
       {
         $group: {
-          _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt', timezone: 'Asia/Seoul' } },
+          _id: {
+            $dateToString: { format: '%Y-%m-%d', date: '$createdAt', timezone: REPORT_TIMEZONE },
+          },
           count: { $sum: 1 },
         },
       },
     ])
     .toArray();
 
-  const map = new Map(rows.map((r) => [r._id, r.count]));
-  return Array.from({ length: days }, (_, i) => {
-    const d = new Date(since);
-    d.setDate(since.getDate() + i);
-    const key = d.toISOString().slice(0, 10);
-    return { date: key, count: map.get(key) ?? 0 };
-  });
+  // 집계와 동일한 타임존 기준으로 키를 만들어야 오늘 데이터가 누락되지 않습니다.
+  return fillDailySeries(rows, days);
 }
 
 export async function insertLeads(leads: Array<Omit<Lead, 'id'>>): Promise<number> {
