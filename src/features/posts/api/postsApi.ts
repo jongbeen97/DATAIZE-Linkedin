@@ -2,7 +2,7 @@
 
 import { apiCall } from '@/shared/lib/http';
 import type { ApiResult } from '@/shared/api/contract';
-import type { Post, PostWithMetrics, PostMetricsSnapshot } from '@/entities/post';
+import type { Post, PostStatus, PostWithMetrics, PostMetricsSnapshot } from '@/entities/post';
 import type { CreatePostInput, ListPostsQuery } from '../model/schema';
 
 export interface PostListResponse {
@@ -11,6 +11,8 @@ export interface PostListResponse {
   page: number;
   pageSize: number;
   totalPages: number;
+  /** 필터와 무관한 전체 상태별 건수 (상단 수치 띠용) */
+  statusCounts: Record<PostStatus, number>;
 }
 
 /** features/posts 가 우리 서버와 대화하는 유일한 창구 */

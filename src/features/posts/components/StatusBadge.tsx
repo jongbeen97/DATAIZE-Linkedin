@@ -13,12 +13,13 @@ export function StatusBadge({ status }: { status: PostStatus }) {
   const color = POST_STATUS_COLOR[status];
   return (
     <span
-      className="inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-medium whitespace-nowrap"
+      className="inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-xs font-medium whitespace-nowrap"
       style={{
-        // 같은 색상값에서 점 · 글자 · 배경 · 테두리를 파생시켜 색 목록을 늘리지 않습니다
-        color,
-        borderColor: `color-mix(in srgb, ${color} 35%, transparent)`,
-        backgroundColor: `color-mix(in srgb, ${color} 12%, transparent)`,
+        // 같은 색상값에서 점 · 글자 · 배경 · 테두리를 파생시켜 색 목록을 늘리지 않습니다.
+        // 글자는 잉크 쪽으로 섞어 옅은 배경 위에서도 대비를 확보합니다.
+        color: `color-mix(in srgb, ${color} 70%, var(--ink))`,
+        borderColor: `color-mix(in srgb, ${color} 30%, transparent)`,
+        backgroundColor: `color-mix(in srgb, ${color} 14%, transparent)`,
       }}
     >
       <span aria-hidden className="size-1.5 rounded-full" style={{ backgroundColor: color }} />

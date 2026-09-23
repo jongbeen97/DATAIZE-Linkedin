@@ -18,7 +18,7 @@ export function PostStatusCard({
   statusCounts,
 }: Pick<DashboardSummary, 'totalPosts' | 'statusCounts'>) {
   return (
-    <Card>
+    <Card className="h-full">
       <CardTitle
         right={
           <Link href="/posts" className="text-xs text-[var(--color-brand-600)] hover:underline">
@@ -37,6 +37,7 @@ export function PostStatusCard({
       </div>
 
       <SegmentedBar
+        legend="list"
         emptyLabel="아직 작성한 게시물이 없습니다."
         segments={POST_STATUSES.map((status) => ({
           key: status,

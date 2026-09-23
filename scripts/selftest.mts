@@ -4,6 +4,7 @@
  *
  * DB 와 외부 API 없이 순수 로직만 검증합니다.
  *   [1] 게시물 상태 전이 규칙  [2] 입력 검증 스키마  [3] 토큰 암호화
+ *   [4] 일자별 집계 키(타임존)  [5] 연동 로그 설명(작업 x 오류 조합)
  */
 import {
   canTransition,
@@ -14,6 +15,7 @@ import {
 } from '../src/entities/post';
 import { toDateKey, recentDateKeys, fillDailySeries } from '../src/shared/lib/date';
 import { createPostSchema } from '../src/features/posts/model/schema';
+import { classifyLogAction, explainFailure } from '../src/features/logs/model/describeLog';
 
 let pass = 0, fail = 0;
 function check(name: string, cond: boolean) {
@@ -105,6 +107,39 @@ const series = fillDailySeries([{ _id: today, count: 7 }], 14);
 check('오늘 집계값이 시리즈에 반영됨', series[13].count === 7);
 check('데이터 없는 날은 0 으로 채움', series[0].count === 0);
 check('전체 합계 보존', series.reduce((a, b) => a + b.count, 0) === 7);
+
+console.log('');
+console.log('[5] 연동 로그 설명 (작업 x 오류 조합)');
+check('POST /rest/posts -> 게시물 발행', classifyLogAction('POST', '/rest/posts') === 'publish');
+check('DELETE /rest/posts/{urn} -> 삭제', classifyLogAction('DELETE', '/rest/posts/urn%3Ali%3Ashare%3A1') === 'unpublish');
+check('쿼리스트링이 붙은 지표 조회 경로 판별',
+  classifyLogAction('GET', '/rest/memberCreatorPostAnalytics?q=entity&entity=x') === 'analytics');
+
+// 같은 403 이라도 어떤 작업이었느냐에 따라 급한 정도가 다르다
+const denyMetrics = explainFailure({ method: 'GET', endpoint: '/rest/socialMetadata/urn', errorCode: 'LINKEDIN_PERMISSION_DENIED', statusCode: 403 });
+const denyPublish = explainFailure({ method: 'POST', endpoint: '/rest/posts', errorCode: 'LINKEDIN_PERMISSION_DENIED', statusCode: 403 });
+check('지표 조회 403 -> 게시에는 영향 없음 (info)', denyMetrics.severity === 'info');
+check('게시 403 -> 조치 필요 (action)', denyPublish.severity === 'action');
+check('두 403 의 설명이 서로 다름', denyMetrics.summary !== denyPublish.summary);
+
+// 이미 지워진 글을 지우려던 404 는 실패처럼 보여도 문제가 아니다
+check('삭제 404 -> 참고 (할 일 없음, info)',
+  explainFailure({ method: 'DELETE', endpoint: '/rest/posts/urn', errorCode: 'LINKEDIN_NOT_FOUND', statusCode: 404 }).severity === 'info');
+check('일시 장애 -> 잠시 후 재시도 (wait)',
+  explainFailure({ method: 'POST', endpoint: '/rest/posts', errorCode: 'LINKEDIN_UNAVAILABLE', statusCode: 503 }).severity === 'wait');
+check('LinkedIn 거절 사유(message)를 설명에 포함',
+  explainFailure({ method: 'POST', endpoint: '/rest/posts', errorCode: 'LINKEDIN_BAD_REQUEST', statusCode: 422,
+    responseSummary: '{"message":"Content is too long"}' }).cause.includes('Content is too long'));
+check('모르는 오류 코드도 빈 설명 없이 처리',
+  explainFailure({ method: 'GET', endpoint: '/x', errorCode: 'WHATEVER', statusCode: 418 }).fix.length > 0);
+
+// "'반응 · 댓글 수 조회'이 거절" 처럼 따옴표로 끼운 이름 뒤 조사가 틀어지던 문제의 재발 방지
+const allCombos = ['LINKEDIN_TOKEN_EXPIRED', 'LINKEDIN_PERMISSION_DENIED', 'LINKEDIN_NOT_FOUND',
+  'LINKEDIN_RATE_LIMITED', 'LINKEDIN_UNAVAILABLE', 'LINKEDIN_BAD_REQUEST', 'OTHER']
+  .flatMap((code) => [['POST', '/rest/posts'], ['DELETE', '/rest/posts/u'], ['GET', '/rest/socialMetadata/u']]
+    .map(([method, endpoint]) => explainFailure({ method, endpoint, errorCode: code, statusCode: 400 })));
+check('모든 설명에 따옴표 뒤 조사 결합이 없음',
+  allCombos.every((e) => !/['’][이가을를은는]\s/.test(`${e.summary} ${e.cause} ${e.fix}`)));
 
 
 console.log(`\n결과: ${pass} 통과 / ${fail} 실패\n`);

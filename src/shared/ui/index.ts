@@ -15,7 +15,12 @@ export { Card, CardTitle } from './Card';
 export { Button } from './Button';
 export { Badge, type BadgeTone } from './Badge';
 export { Modal } from './Modal';
+export { Menu, type MenuItem } from './Menu';
+export { PageHeader, type Crumb } from './PageHeader';
+export { StatStrip, type Stat } from './StatStrip';
 export { Skeleton, EmptyState, ErrorState } from './states';
+
+export * from './icons';
 
 export { BarChart } from './charts/BarChart';
 export { Sparkline, Delta } from './charts/Sparkline';

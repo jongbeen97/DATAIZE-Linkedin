@@ -1,9 +1,11 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Card, ErrorState, Skeleton } from '@/shared/ui';
+import { Card, ErrorState, Skeleton, StatStrip } from '@/shared/ui';
 import { useToast } from '@/shared/ui/toast';
 import { apiCall, hintFor } from '@/shared/lib/http';
+import { formatNumber } from '@/shared/lib/format';
+import { POST_STATUS_COLOR } from '@/entities/post';
 import { refreshMetrics } from '@/features/posts/api/postsApi';
 import type { DashboardSummary } from '../model/dashboard';
 import { ActionBanner } from './sections/ActionBanner';
@@ -84,8 +86,50 @@ export function DashboardView() {
 
   if (!data) return null;
 
+  const newLeads14d = data.dailyLeads.reduce((sum, d) => sum + d.count, 0);
+  const totalLeads = Object.values(data.leadStatusCounts).reduce((a, b) => a + b, 0);
+  const converted = data.leadStatusCounts.CONVERTED;
+
   return (
     <div className="space-y-4">
+      {/* 노출 · 참여율은 아래 성과 카드에 있으므로, 띠에는 '게시'와 '리드' 규모만 둡니다 */}
+      <StatStrip
+        stats={[
+          {
+            key: 'posts',
+            label: '전체 게시물',
+            value: formatNumber(data.totalPosts),
+            caption: `초안 ${formatNumber(data.statusCounts.DRAFT)} · 예약 ${formatNumber(data.statusCounts.SCHEDULED)}`,
+            color: 'var(--color-brand-500)',
+            href: '/posts',
+          },
+          {
+            key: 'published',
+            label: '발행 완료',
+            value: formatNumber(data.statusCounts.PUBLISHED),
+            caption: `실패 ${formatNumber(data.statusCounts.FAILED)}건`,
+            color: POST_STATUS_COLOR.PUBLISHED,
+            href: '/posts?status=PUBLISHED',
+          },
+          {
+            key: 'leads14',
+            label: '최근 14일 신규 리드',
+            value: formatNumber(newLeads14d),
+            caption: `누적 ${formatNumber(totalLeads)}명`,
+            color: POST_STATUS_COLOR.SCHEDULED,
+            href: '/leads',
+          },
+          {
+            key: 'converted',
+            label: '전환 리드',
+            value: formatNumber(converted),
+            caption: `전체 리드 대비 ${totalLeads > 0 ? ((converted / totalLeads) * 100).toFixed(1) : '0.0'}%`,
+            color: POST_STATUS_COLOR.PUBLISHED,
+            href: '/leads',
+          },
+        ]}
+      />
+
       <ActionBanner actionRequired={data.actionRequired} />
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
@@ -119,6 +163,7 @@ export function DashboardView() {
 function DashboardSkeleton() {
   return (
     <div className="space-y-4">
+      <Skeleton className="h-20 w-full" />
       <Skeleton className="h-16 w-full" />
       <div className="grid gap-4 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
         <Skeleton className="h-40" />

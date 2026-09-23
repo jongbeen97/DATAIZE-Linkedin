@@ -3,14 +3,14 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Button, Card, EmptyState, ErrorState, Skeleton } from '@/shared/ui';
+import { Button, Card, EmptyState, ErrorState, Skeleton, StatStrip } from '@/shared/ui';
 import { useToast } from '@/shared/ui/toast';
 import { hintFor } from '@/shared/lib/http';
-import { truncate } from '@/shared/lib/format';
-import type { PostStatus } from '@/entities/post';
+import { formatNumber, truncate } from '@/shared/lib/format';
+import { POST_STATUS_COLOR, type PostStatus } from '@/entities/post';
 import * as api from '../api/postsApi';
 import type { PostListResponse } from '../api/postsApi';
-import { PostFilterBar } from './list/PostFilterBar';
+import { PostFilterBar, type PostFilter } from './list/PostFilterBar';
 import { PostTable } from './list/PostTable';
 import { PostActionModal } from './list/PostActionModal';
 import { Pagination } from './list/Pagination';
@@ -35,6 +35,8 @@ export function PostListView() {
 
   const statusParam = params.get('status') as PostStatus | null;
   const keywordParam = params.get('keyword') ?? '';
+  const fromParam = params.get('from') ?? '';
+  const toParam = params.get('to') ?? '';
   const pageParam = Number(params.get('page') ?? '1');
 
   const [data, setData] = useState<PostListResponse | null>(null);
@@ -49,6 +51,8 @@ export function PostListView() {
     const res = await api.fetchPosts({
       status: statusParam ?? undefined,
       keyword: keywordParam || undefined,
+      from: fromParam || undefined,
+      to: toParam || undefined,
       page: pageParam,
       pageSize: PAGE_SIZE,
     });
@@ -58,22 +62,20 @@ export function PostListView() {
       return;
     }
     setData(res.data);
-  }, [statusParam, keywordParam, pageParam]);
+  }, [statusParam, keywordParam, fromParam, toParam, pageParam]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
   /** 필터 상태의 단일 소스는 URL 입니다 */
-  function applyFilter(next: { status?: PostStatus | null; keyword?: string; page?: number }) {
+  function applyFilter(next: Partial<PostFilter> & { page?: number }) {
     const q = new URLSearchParams(params.toString());
-    if ('status' in next) {
-      if (next.status) q.set('status', next.status);
-      else q.delete('status');
-    }
-    if ('keyword' in next) {
-      if (next.keyword) q.set('keyword', next.keyword);
-      else q.delete('keyword');
+    for (const key of ['status', 'keyword', 'from', 'to'] as const) {
+      if (!(key in next)) continue;
+      const value = next[key];
+      if (value) q.set(key, value);
+      else q.delete(key);
     }
     q.set('page', String(next.page ?? 1));
     router.push(`/posts?${q.toString()}`);
@@ -118,17 +120,21 @@ export function PostListView() {
     void load();
   }
 
-  const isFiltered = Boolean(statusParam || keywordParam);
+  const isFiltered = Boolean(statusParam || keywordParam || fromParam || toParam);
+  const filter: PostFilter = {
+    status: statusParam,
+    keyword: keywordParam,
+    from: fromParam,
+    to: toParam,
+  };
 
   return (
-    <div className="space-y-4">
-      <PostFilterBar
-        status={statusParam}
-        keyword={keywordParam}
-        onChange={(next) => applyFilter(next)}
-      />
+    <div>
+      <PostStats counts={data?.statusCounts ?? null} activeStatus={statusParam} />
 
       <Card padded={false}>
+        <PostFilterBar filter={filter} onChange={(next) => applyFilter(next)} />
+
         {loading ? (
           <div className="space-y-3 p-5">
             {Array.from({ length: 5 }).map((_, i) => (
@@ -147,7 +153,10 @@ export function PostListView() {
             }
             action={
               isFiltered ? (
-                <Button size="sm" onClick={() => applyFilter({ status: null, keyword: '' })}>
+                <Button
+                  size="sm"
+                  onClick={() => applyFilter({ status: null, keyword: '', from: '', to: '' })}
+                >
                   필터 초기화
                 </Button>
               ) : (
@@ -179,5 +188,71 @@ export function PostListView() {
         onConfirm={(action) => void runAction(action)}
       />
     </div>
+  );
+}
+
+/**
+ * 상단 수치 띠 — 필터와 무관한 전체 기준.
+ * 누르면 해당 상태로 목록이 걸러집니다 (다시 누르면 해제).
+ */
+function PostStats({
+  counts,
+  activeStatus,
+}: {
+  counts: Record<PostStatus, number> | null;
+  activeStatus: PostStatus | null;
+}) {
+  const v = (n: number) => (counts ? formatNumber(n) : '–');
+  const c = counts ?? {
+    DRAFT: 0,
+    SCHEDULED: 0,
+    PUBLISHING: 0,
+    PUBLISHED: 0,
+    FAILED: 0,
+    REMOVED: 0,
+  };
+  const total = Object.values(c).reduce((a, b) => a + b, 0);
+  const toggle = (s: PostStatus) => (activeStatus === s ? '/posts' : `/posts?status=${s}`);
+
+  return (
+    <StatStrip
+      stats={[
+        {
+          key: 'total',
+          label: '전체 게시물',
+          value: v(total),
+          caption: `LinkedIn 삭제됨 ${v(c.REMOVED)}건 포함`,
+          color: 'var(--color-brand-500)',
+          href: '/posts',
+        },
+        {
+          key: 'published',
+          label: '발행 완료',
+          value: v(c.PUBLISHED),
+          caption: 'LinkedIn 에 게시 중인 글',
+          color: POST_STATUS_COLOR.PUBLISHED,
+          href: toggle('PUBLISHED'),
+          active: activeStatus === 'PUBLISHED',
+        },
+        {
+          key: 'scheduled',
+          label: '예약',
+          value: v(c.SCHEDULED),
+          caption: `초안 ${v(c.DRAFT)}건은 별도`,
+          color: POST_STATUS_COLOR.SCHEDULED,
+          href: toggle('SCHEDULED'),
+          active: activeStatus === 'SCHEDULED',
+        },
+        {
+          key: 'failed',
+          label: '발행 실패',
+          value: v(c.FAILED),
+          caption: c.FAILED > 0 ? '눌러서 사유 확인 후 재시도' : '확인할 실패 없음',
+          color: POST_STATUS_COLOR.FAILED,
+          href: toggle('FAILED'),
+          active: activeStatus === 'FAILED',
+        },
+      ]}
+    />
   );
 }

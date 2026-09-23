@@ -1,6 +1,6 @@
 import Link from 'next/link';
-import { Card, CardTitle, Badge, EmptyState } from '@/shared/ui';
-import { formatDateTime, formatNumber } from '@/shared/lib/format';
+import { Card, CardTitle, Badge, EmptyState, PageHeader, StatStrip } from '@/shared/ui';
+import { formatDate, formatNumber } from '@/shared/lib/format';
 import { listRecentLeads, countLeadsByStatus, countLeadsBySource } from '@/server/repositories/leadRepository';
 import { LEAD_SOURCE_LABEL, LEAD_STATUS_LABEL, type LeadStatus } from '@/entities/lead';
 
@@ -21,18 +21,49 @@ export default async function LeadsPage() {
     countLeadsBySource(),
   ]);
 
+  const total = Object.values(statusCounts).reduce((a, b) => a + b, 0);
+  const conversion = total > 0 ? (statusCounts.CONVERTED / total) * 100 : 0;
+
   return (
     <div className="space-y-4">
-      <div className="grid gap-3 sm:grid-cols-5">
-        {(Object.keys(statusCounts) as LeadStatus[]).map((s) => (
-          <Card key={s}>
-            <p className="text-xs text-[var(--ink-muted)]">{LEAD_STATUS_LABEL[s]}</p>
-            <p className="mt-1 text-2xl font-semibold tabular-nums">
-              {formatNumber(statusCounts[s])}
-            </p>
-          </Card>
-        ))}
-      </div>
+      <PageHeader
+        crumbs={[{ label: '유입 · Lead' }]}
+        title="유입 · Lead"
+        description="LinkedIn 게시물을 통해 들어온 방문자와 리드의 진행 상황을 봅니다."
+      />
+
+      <StatStrip
+        stats={[
+          {
+            key: 'total',
+            label: '전체 리드',
+            value: formatNumber(total),
+            caption: `접촉 ${formatNumber(statusCounts.CONTACTED)} · 검증 ${formatNumber(statusCounts.QUALIFIED)}`,
+            color: 'var(--color-brand-500)',
+          },
+          {
+            key: 'new',
+            label: '신규',
+            value: formatNumber(statusCounts.NEW),
+            caption: '아직 연락하지 않은 리드',
+            color: 'var(--status-scheduled)',
+          },
+          {
+            key: 'converted',
+            label: '전환',
+            value: formatNumber(statusCounts.CONVERTED),
+            caption: `전체 대비 ${conversion.toFixed(1)}%`,
+            color: 'var(--status-published)',
+          },
+          {
+            key: 'lost',
+            label: '이탈',
+            value: formatNumber(statusCounts.LOST),
+            caption: '진행이 중단된 리드',
+            color: 'var(--status-failed)',
+          },
+        ]}
+      />
 
       <Card>
         <CardTitle>유입 경로별 분포</CardTitle>
@@ -63,7 +94,13 @@ export default async function LeadsPage() {
 
       <Card padded={false}>
         <div className="px-5 pt-5">
-          <CardTitle>최근 유입 리드</CardTitle>
+          <CardTitle
+            right={
+              <span className="text-xs text-[var(--ink-muted)]">최근 {formatNumber(leads.length)}건</span>
+            }
+          >
+            최근 유입 리드
+          </CardTitle>
         </div>
 
         {leads.length === 0 ? (
@@ -83,27 +120,58 @@ export default async function LeadsPage() {
           <div className="overflow-x-auto">
             <table className="w-full min-w-[42rem] text-sm">
               <thead>
-                <tr className="border-b border-[var(--line)] text-left text-xs text-[var(--ink-muted)]">
-                  <th className="px-5 py-3 font-medium">이름</th>
-                  <th className="px-3 py-3 font-medium">이메일</th>
-                  <th className="px-3 py-3 font-medium">회사</th>
-                  <th className="px-3 py-3 font-medium">유입 경로</th>
-                  <th className="px-3 py-3 font-medium">상태</th>
-                  <th className="px-5 py-3 font-medium">유입 시각</th>
+                <tr className="bg-[var(--table-head)] text-left text-[13px] text-[var(--ink)]">
+                  <th className="px-5 py-3 font-semibold">이름</th>
+                  <th className="px-3 py-3 font-semibold">회사</th>
+                  <th className="px-3 py-3 font-semibold">유입 경로</th>
+                  <th className="px-3 py-3 font-semibold">상태</th>
+                  <th className="px-5 py-3 font-semibold">유입일</th>
                 </tr>
               </thead>
               <tbody>
                 {leads.map((lead) => (
-                  <tr key={lead.id} className="border-b border-[var(--line)] last:border-0 hover:bg-[var(--canvas)]">
-                    <td className="px-5 py-3 font-medium">{lead.name}</td>
-                    <td className="px-3 py-3 text-xs text-[var(--ink-muted)]">{lead.email}</td>
-                    <td className="px-3 py-3 text-xs">{lead.company ?? '-'}</td>
-                    <td className="px-3 py-3 text-xs">{LEAD_SOURCE_LABEL[lead.source]}</td>
-                    <td className="px-3 py-3">
-                      <Badge tone={STATUS_TONE[lead.status]}>{LEAD_STATUS_LABEL[lead.status]}</Badge>
+                  <tr
+                    key={lead.id}
+                    className="border-t border-[var(--line)] transition-colors hover:bg-[var(--surface-sunken)]"
+                  >
+                    <td className="px-5 py-3">
+                      <div className="flex items-center gap-3">
+                        <span
+                          aria-hidden
+                          className="grid size-8 shrink-0 place-items-center rounded-full bg-[var(--color-brand-50)] text-xs font-semibold text-[var(--color-brand-700)] dark:bg-[var(--color-brand-700)]/25 dark:text-[var(--color-brand-400)]"
+                        >
+                          {lead.name.slice(0, 1)}
+                        </span>
+                        <div className="min-w-0">
+                          <p className="font-semibold">{lead.name}</p>
+                          <p className="mt-0.5 text-xs text-[var(--ink-muted)]">{lead.email}</p>
+                        </div>
+                      </div>
                     </td>
-                    <td className="px-5 py-3 text-xs whitespace-nowrap text-[var(--ink-muted)]">
-                      {formatDateTime(lead.createdAt)}
+                    <td className="px-3 py-3">{lead.company ?? '-'}</td>
+                    <td className="px-3 py-3">
+                      <p>{LEAD_SOURCE_LABEL[lead.source]}</p>
+                      {/* 어떤 게시물을 보고 들어왔는지 연결된 경우에만 표시합니다 */}
+                      {lead.referrerPostId && (
+                        <p className="mt-0.5 text-xs text-[var(--color-brand-600)] dark:text-[var(--color-brand-400)]">
+                          게시물 경유
+                        </p>
+                      )}
+                    </td>
+                    <td className="px-3 py-3">
+                      <Badge tone={STATUS_TONE[lead.status]} dot>
+                        {LEAD_STATUS_LABEL[lead.status]}
+                      </Badge>
+                    </td>
+                    <td className="px-5 py-3 whitespace-nowrap">
+                      <p className="tabular-nums">{formatDate(lead.createdAt)}</p>
+                      <p className="mt-0.5 text-xs text-[var(--ink-muted)] tabular-nums">
+                        {new Date(lead.createdAt).toLocaleTimeString('ko-KR', {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                          hour12: false,
+                        })}
+                      </p>
                     </td>
                   </tr>
                 ))}

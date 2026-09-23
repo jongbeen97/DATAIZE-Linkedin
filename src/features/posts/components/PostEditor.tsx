@@ -155,7 +155,7 @@ export function PostEditor({ initial }: { initial?: Post }) {
             restoredDraft ? <Badge tone="amber">임시저장 내용을 불러왔습니다</Badge> : undefined
           }
         >
-          {isEdit ? '게시물 수정' : '새 게시물 작성'}
+          게시물 내용
         </CardTitle>
 
         <div className="space-y-4">
@@ -248,7 +248,7 @@ export function PostEditor({ initial }: { initial?: Post }) {
 
       {/* ------------------------- 미리보기 ------------------------- */}
       <Card className="h-fit lg:sticky lg:top-6">
-        <CardTitle right={<Badge tone="blue">미리보기</Badge>}>
+        <CardTitle right={<Badge tone="neutral">미리보기</Badge>}>
           LinkedIn 에서 이렇게 보입니다
         </CardTitle>
         <div className="rounded-lg border border-[var(--line)] bg-[var(--canvas)] p-4">
@@ -326,7 +326,7 @@ function Field({
 
 function inputClass(hasError: boolean): string {
   return cx(
-    'w-full rounded-lg border bg-[var(--surface)] px-3 py-2 text-sm outline-none transition',
+    'w-full rounded-lg border bg-[var(--surface)] px-3 py-2.5 text-sm shadow-[var(--shadow-sm)] outline-none transition',
     hasError ? 'border-rose-400' : 'border-[var(--line)] focus:border-[var(--color-brand-500)]',
   );
 }

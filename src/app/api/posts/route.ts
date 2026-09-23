@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server';
 import { ok, fail, withErrorHandling } from '@/server/http/response';
 import { requireSession } from '@/server/auth/session';
 import { ensureIndexes } from '@/server/db/mongo';
-import { listPosts } from '@/server/repositories/postRepository';
+import { countByStatus, listPosts } from '@/server/repositories/postRepository';
 import { createPost } from '@/server/services/postService';
 import { createPostSchema, listPostsQuerySchema } from '@/features/posts/model/schema';
 
@@ -20,17 +20,21 @@ export const GET = withErrorHandling(async (req: NextRequest) => {
   }
 
   const q = parsed.data;
-  const result = await listPosts({
-    userId: session.userId,
-    status: q.status,
-    keyword: q.keyword || undefined,
-    from: q.from ? new Date(`${q.from}T00:00:00+09:00`) : undefined,
-    to: q.to ? new Date(`${q.to}T23:59:59+09:00`) : undefined,
-    page: q.page,
-    pageSize: q.pageSize,
-  });
+  // 상단 수치 띠는 필터와 무관한 전체 기준입니다 — 목록을 좁혀도 전체 규모는 그대로 보여야 합니다
+  const [result, statusCounts] = await Promise.all([
+    listPosts({
+      userId: session.userId,
+      status: q.status,
+      keyword: q.keyword || undefined,
+      from: q.from ? new Date(`${q.from}T00:00:00+09:00`) : undefined,
+      to: q.to ? new Date(`${q.to}T23:59:59+09:00`) : undefined,
+      page: q.page,
+      pageSize: q.pageSize,
+    }),
+    countByStatus(session.userId),
+  ]);
 
-  return ok(result);
+  return ok({ ...result, statusCounts });
 });
 
 /** POST /api/posts — 생성 (초안 또는 예약) */

@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { Card, CardTitle, Badge, Button, Sparkline, Delta } from '@/shared/ui';
+import { Card, CardTitle, Badge, Button, Sparkline, Delta, IconExternal, PageHeader } from '@/shared/ui';
 import { formatDateTime, formatNumber, formatRelative } from '@/shared/lib/format';
 import { requireSession } from '@/server/auth/session';
 import { findPostById } from '@/server/repositories/postRepository';
@@ -20,9 +20,20 @@ export default async function PostDetailPage({ params }: { params: Promise<{ id:
   if (!post) notFound();
 
   // 수정 가능한 상태면 에디터를, 이미 발행된 글이면 읽기 전용 상세를 보여준다
+  const crumbs = [{ label: 'SNS 게시물', href: '/posts' }, { label: post.title }];
+
   if (isEditable(post.status)) {
     return (
       <div className="space-y-4">
+        <PageHeader
+          crumbs={crumbs}
+          title={
+            <span className="flex flex-wrap items-center gap-3">
+              게시물 수정 <StatusBadge status={post.status} />
+            </span>
+          }
+          description="발행 전 게시물은 내용과 예약 시각을 고칠 수 있습니다."
+        />
         {post.status === 'FAILED' && post.failReason && (
           <Card className="border-rose-300 bg-rose-50/70 dark:border-rose-900 dark:bg-rose-950/40">
             <p className="text-sm font-semibold text-rose-900 dark:text-rose-200">
@@ -54,9 +65,28 @@ export default async function PostDetailPage({ params }: { params: Promise<{ id:
     metrics && metrics.impressions > 0 ? (leads / metrics.impressions) * 100 : 0;
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
+    <>
+    <PageHeader
+      crumbs={crumbs}
+      title={
+        <span className="flex flex-wrap items-center gap-3">
+          {post.title} <StatusBadge status={post.status} />
+        </span>
+      }
+      description={`${formatDateTime(post.publishedAt)} 발행 · ${post.visibility === 'PUBLIC' ? '전체 공개' : '1촌 공개'}`}
+      actions={
+        post.linkedinUrl ? (
+          <a href={post.linkedinUrl} target="_blank" rel="noopener noreferrer">
+            <Button variant="primary">
+              LinkedIn 에서 보기 <IconExternal size={14} />
+            </Button>
+          </a>
+        ) : undefined
+      }
+    />
+    <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
       <Card>
-        <CardTitle right={<StatusBadge status={post.status} />}>{post.title}</CardTitle>
+        <CardTitle>본문</CardTitle>
 
         <div className="rounded-lg border border-[var(--line)] bg-[var(--canvas)] p-4 text-sm leading-relaxed whitespace-pre-wrap">
           {post.content}
@@ -71,13 +101,8 @@ export default async function PostDetailPage({ params }: { params: Promise<{ id:
 
         <div className="mt-5 flex gap-2 border-t border-[var(--line)] pt-4">
           <Link href="/posts">
-            <Button variant="ghost">목록으로</Button>
+            <Button>목록으로</Button>
           </Link>
-          {post.linkedinUrl && (
-            <a href={post.linkedinUrl} target="_blank" rel="noopener noreferrer">
-              <Button variant="primary">LinkedIn 에서 보기 ↗</Button>
-            </a>
-          )}
         </div>
       </Card>
 
@@ -159,6 +184,7 @@ export default async function PostDetailPage({ params }: { params: Promise<{ id:
         )}
       </Card>
     </div>
+    </>
   );
 }
 

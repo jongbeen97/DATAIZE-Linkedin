@@ -30,12 +30,12 @@ export function ConversionTable({ rows }: { rows: DashboardPostPerformance[] }) 
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-y border-[var(--line)] text-[11px] text-[var(--ink-muted)]">
-              <th className="px-5 py-2 text-left font-medium">게시물</th>
-              <th className="px-3 py-2 text-right font-medium">노출</th>
-              <th className="px-3 py-2 text-right font-medium">반응</th>
-              <th className="px-3 py-2 text-right font-medium">유입 리드</th>
-              <th className="px-5 py-2 text-right font-medium">전환율</th>
+            <tr className="border-y border-[var(--line)] bg-[var(--table-head)] text-xs text-[var(--ink)]">
+              <th className="px-5 py-2 text-left font-semibold">게시물</th>
+              <th className="px-3 py-2 text-right font-semibold">노출</th>
+              <th className="px-3 py-2 text-right font-semibold">반응</th>
+              <th className="px-3 py-2 text-right font-semibold">유입 리드</th>
+              <th className="px-5 py-2 text-right font-semibold">전환율</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-[var(--line)]">

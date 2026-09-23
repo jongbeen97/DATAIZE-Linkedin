@@ -14,7 +14,7 @@ export default async function LoginPage({
   const { error } = await searchParams;
 
   return (
-    <main className="grid min-h-dvh place-items-center px-4 py-10">
+    <main className="grid min-h-dvh place-items-center bg-[var(--canvas)] px-4 py-10">
       <div className="w-full max-w-md">
         <div className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-8 shadow-sm">
           <p className="text-xs font-semibold tracking-widest text-[var(--color-brand-600)]">
