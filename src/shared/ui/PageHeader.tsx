@@ -29,7 +29,7 @@ export function PageHeader({
       <nav aria-label="현재 위치" className="mb-4 flex items-center gap-2 text-sm">
         <Link
           href="/dashboard"
-          aria-label="대시보드"
+          aria-label="Home"
           className="text-[var(--ink-muted)] transition hover:text-[var(--ink)]"
         >
           <IconHome />

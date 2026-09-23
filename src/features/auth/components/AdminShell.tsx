@@ -9,7 +9,7 @@ import {
   IconActivity,
   IconChevronDown,
   IconFile,
-  IconGrid,
+  IconHome,
   IconLogout,
   IconSearch,
   IconUsers,
@@ -37,7 +37,7 @@ const NAV_SECTIONS: { title: string; items: NavItem[] }[] = [
   {
     title: '메인 메뉴',
     items: [
-      { href: '/dashboard', label: '대시보드', icon: <IconGrid /> },
+      { href: '/dashboard', label: 'Home', icon: <IconHome /> },
       {
         href: '/posts',
         label: 'SNS 게시물',

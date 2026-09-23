@@ -121,7 +121,7 @@ export default async function PostDetailPage({ params }: { params: Promise<{ id:
 
         {!metrics ? (
           <p className="text-xs leading-relaxed text-[var(--ink-muted)]">
-            아직 수집된 지표가 없습니다. 대시보드에서 [지금 새로고침]을 눌러 수집할 수 있습니다.
+            아직 수집된 지표가 없습니다. Home 화면에서 [새로고침]을 눌러 수집할 수 있습니다.
           </p>
         ) : (
           <>

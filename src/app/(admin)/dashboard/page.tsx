@@ -8,8 +8,8 @@ export default function DashboardPage() {
   return (
     <>
       <PageHeader
-        crumbs={[{ label: '대시보드' }]}
-        title="대시보드"
+        crumbs={[{ label: 'Home' }]}
+        title="Home"
         description="발행 상태, 누적 성과, 유입 리드를 한눈에 보고 지금 처리할 일을 확인합니다."
         actions={
           <>
